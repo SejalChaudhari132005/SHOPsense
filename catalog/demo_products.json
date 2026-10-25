@@ -1,0 +1,1837 @@
+[
+  {
+    "product_id": "prod_foot_001",
+    "product_name": "TerraStride GORE-TEX Trail Running Shoes",
+    "brand": "AlpineTrack",
+    "category": "footwear",
+    "subcategory": "trail_running",
+    "description": "SAMPLE DEMO DATA: Weatherproof trail running shoes with GORE-TEX membrane and 5mm multidirectional mud lugs.",
+    "price": 119.99,
+    "currency": "USD",
+    "normalized_price_usd": 119.99,
+    "product_url": "https://demo.shopsense.local/products/terrastride-gtx",
+    "image_url": "https://demo.shopsense.local/images/terrastride.jpg",
+    "source_store": "SampleTrailGear",
+    "source_product_id": "SKU-FOOT-001",
+    "attributes": {
+      "waterproof": true,
+      "cushioning": "Max Cushion EVA",
+      "terrain": "rock and mud",
+      "material": "Synthetic Mesh and GORE-TEX"
+    },
+    "use_cases": ["trail running", "hiking", "wet weather", "muddy trails"],
+    "tags": ["trail running", "waterproof", "gore-tex", "outdoor", "mud grip", "cushioned"],
+    "sizes": ["8", "8.5", "9", "9.5", "10", "10.5", "11", "12"],
+    "colours": ["forest olive", "black rock", "flame orange"],
+    "specifications": {
+      "weight_kg": 0.31,
+      "drop_mm": 6.0,
+      "lug_depth_mm": 5.0,
+      "waterproof_rating": "GORE-TEX Extended Comfort"
+    },
+    "availability": "in_stock",
+    "rating": 4.6,
+    "review_count": 512,
+    "shipping_information": {
+      "free_shipping": true,
+      "estimated_days": 2,
+      "shipping_cost": 0.0,
+      "currency": "USD",
+      "carrier": "DemoExpress"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0,
+      "notes": "Sample test product for multi-constraint trail queries"
+    }
+  },
+  {
+    "product_id": "prod_foot_002",
+    "product_name": "CloudStrider Road Running Shoe",
+    "brand": "NimbusRun",
+    "category": "footwear",
+    "subcategory": "road_running",
+    "description": "SAMPLE DEMO DATA: High-energy return marathon training shoe with supercritical nitrogen-infused foam.",
+    "price": 145.00,
+    "currency": "USD",
+    "normalized_price_usd": 145.00,
+    "product_url": "https://demo.shopsense.local/products/cloudstrider",
+    "image_url": "https://demo.shopsense.local/images/cloudstrider.jpg",
+    "source_store": "SampleRunnerStore",
+    "source_product_id": "SKU-FOOT-002",
+    "attributes": {
+      "waterproof": false,
+      "cushioning": "Supercritical Nitrogen Foam",
+      "terrain": "road and pavement",
+      "material": "Engineered Jacquard Mesh"
+    },
+    "use_cases": ["road running", "marathon training", "gym workout", "daily running"],
+    "tags": ["marathon", "road running", "lightweight", "breathable", "high cushion"],
+    "sizes": ["7", "8", "8.5", "9", "9.5", "10", "10.5", "11", "11.5", "12"],
+    "colours": ["pure white", "cobalt blue", "triple black"],
+    "specifications": {
+      "weight_kg": 0.23,
+      "drop_mm": 8.0,
+      "plate_type": "Carbon-infused nylon"
+    },
+    "availability": "in_stock",
+    "rating": 4.7,
+    "review_count": 890,
+    "shipping_information": {
+      "free_shipping": true,
+      "estimated_days": 3,
+      "shipping_cost": 0.0,
+      "currency": "USD"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0
+    }
+  },
+  {
+    "product_id": "prod_foot_003",
+    "product_name": "TrailPeak Extreme Waterproof Hiking Boot",
+    "brand": "AlpineTrack",
+    "category": "footwear",
+    "subcategory": "hiking_boots",
+    "description": "SAMPLE DEMO DATA: Heavy-duty mountain boot with ankle stability shank and rubber rand protection.",
+    "price": 189.95,
+    "currency": "USD",
+    "normalized_price_usd": 189.95,
+    "product_url": "https://demo.shopsense.local/products/trailpeak-boot",
+    "image_url": "https://demo.shopsense.local/images/trailpeak.jpg",
+    "source_store": "SampleMountainSupply",
+    "source_product_id": "SKU-FOOT-003",
+    "attributes": {
+      "waterproof": true,
+      "cushioning": "Dual-density Polyurethane",
+      "terrain": "alpine and steep rock",
+      "material": "Nubuck Leather"
+    },
+    "use_cases": ["mountain hiking", "backpacking", "rough terrain", "winter hiking"],
+    "tags": ["hiking boot", "waterproof", "leather", "ankle support", "heavy duty", "durable"],
+    "sizes": ["9", "9.5", "10", "10.5", "11", "12", "13"],
+    "colours": ["coyote tan", "black rock"],
+    "specifications": {
+      "weight_kg": 0.65,
+      "shaft_height_inch": 6.5,
+      "membrane": "HydroDry Ultra"
+    },
+    "availability": "in_stock",
+    "rating": 4.8,
+    "review_count": 310,
+    "shipping_information": {
+      "free_shipping": false,
+      "estimated_days": 4,
+      "shipping_cost": 9.99,
+      "currency": "USD"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0,
+      "notes": "Testing heavy-weight tradeoff against lightweight queries"
+    }
+  },
+  {
+    "product_id": "prod_foot_004",
+    "product_name": "SwiftMotion Lightweight Gym Trainer",
+    "brand": "VelocityFit",
+    "category": "footwear",
+    "subcategory": "training_shoes",
+    "description": "SAMPLE DEMO DATA: Budget-friendly indoor training and lifting shoe with flat stable sole.",
+    "price": 64.99,
+    "currency": "USD",
+    "normalized_price_usd": 64.99,
+    "product_url": "https://demo.shopsense.local/products/swiftmotion",
+    "image_url": "https://demo.shopsense.local/images/swiftmotion.jpg",
+    "source_store": "SampleFitnessDirect",
+    "source_product_id": "SKU-FOOT-004",
+    "attributes": {
+      "waterproof": false,
+      "cushioning": "Firm EVA",
+      "terrain": "indoor gym",
+      "material": "Air Mesh"
+    },
+    "use_cases": ["gym", "cross-training", "weightlifting", "hiit"],
+    "tags": ["gym", "budget", "affordable", "training shoes", "flat sole", "breathable"],
+    "sizes": ["8", "8.5", "9", "9.5", "10", "11"],
+    "colours": ["matte black", "grey", "crimson"],
+    "specifications": {
+      "weight_kg": 0.28,
+      "drop_mm": 4.0
+    },
+    "availability": "in_stock",
+    "rating": 4.3,
+    "review_count": 215,
+    "shipping_information": {
+      "free_shipping": true,
+      "estimated_days": 3,
+      "shipping_cost": 0.0,
+      "currency": "USD"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0
+    }
+  },
+  {
+    "product_id": "prod_foot_005",
+    "product_name": "AeroKicks Barefoot Minimalist Running Shoe",
+    "brand": "PureMotion",
+    "category": "footwear",
+    "subcategory": "barefoot_running",
+    "description": "SAMPLE DEMO DATA: Featherweight zero-drop minimalist runner with wide anatomical toe box.",
+    "price": 89.00,
+    "currency": "USD",
+    "normalized_price_usd": 89.00,
+    "product_url": "https://demo.shopsense.local/products/aerokicks",
+    "image_url": "https://demo.shopsense.local/images/aerokicks.jpg",
+    "source_store": "SampleBarefootCo",
+    "source_product_id": "SKU-FOOT-005",
+    "attributes": {
+      "waterproof": false,
+      "cushioning": "Minimal 4mm",
+      "terrain": "road and light gravel",
+      "material": "Recycled Knit"
+    },
+    "use_cases": ["barefoot running", "natural movement", "walking"],
+    "tags": ["barefoot", "zero drop", "featherweight", "ultralight", "wide toe box"],
+    "sizes": ["8", "9", "10", "11"],
+    "colours": ["navy blue", "black"],
+    "specifications": {
+      "weight_kg": 0.18,
+      "drop_mm": 0.0,
+      "stack_height_mm": 6.5
+    },
+    "availability": "low_stock",
+    "rating": 4.5,
+    "review_count": 140,
+    "shipping_information": {
+      "free_shipping": true,
+      "estimated_days": 2,
+      "shipping_cost": 0.0,
+      "currency": "USD"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0
+    }
+  },
+  {
+    "product_id": "prod_foot_006",
+    "product_name": "UrbanGlide Classic Leather Casual Sneaker",
+    "brand": "MetroStep",
+    "category": "footwear",
+    "subcategory": "casual_sneakers",
+    "description": "SAMPLE DEMO DATA: Premium handcrafted full-grain leather everyday sneaker with ortholite insole. Listed in INR.",
+    "price": 4999.00,
+    "currency": "INR",
+    "normalized_price_usd": 59.99,
+    "product_url": "https://demo.shopsense.local/products/urbanglide-inr",
+    "image_url": "https://demo.shopsense.local/images/urbanglide.jpg",
+    "source_store": "SampleIndiaStore",
+    "source_product_id": "SKU-FOOT-IN-006",
+    "attributes": {
+      "waterproof": false,
+      "material": "Full-grain Nappa Leather",
+      "occasion": "casual smart"
+    },
+    "use_cases": ["casual wear", "office commute", "travel walking"],
+    "tags": ["sneakers", "leather", "casual", "smart casual", "inr currency"],
+    "sizes": ["7", "8", "9", "10", "11"],
+    "colours": ["pure white", "tan"],
+    "specifications": {
+      "weight_kg": 0.38,
+      "sole_material": "Vulcanized Rubber"
+    },
+    "availability": "in_stock",
+    "rating": 4.4,
+    "review_count": 380,
+    "shipping_information": {
+      "free_shipping": true,
+      "estimated_days": 3,
+      "shipping_cost": 0.0,
+      "currency": "INR"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0,
+      "notes": "Testing currency conversion and INR display formatting"
+    }
+  },
+  {
+    "product_id": "prod_cloth_001",
+    "product_name": "StormShield Lightweight Packable Rain Jacket",
+    "brand": "AlpineTrack",
+    "category": "clothing",
+    "subcategory": "jackets",
+    "description": "SAMPLE DEMO DATA: Fully seam-taped waterproof 10,000mm breathable shell that packs into its own pocket.",
+    "price": 89.50,
+    "currency": "USD",
+    "normalized_price_usd": 89.50,
+    "product_url": "https://demo.shopsense.local/products/stormshield-jacket",
+    "image_url": "https://demo.shopsense.local/images/stormshield.jpg",
+    "source_store": "SampleTrailGear",
+    "source_product_id": "SKU-CLOTH-001",
+    "attributes": {
+      "waterproof": true,
+      "windproof": true,
+      "breathable": true,
+      "packable": true
+    },
+    "use_cases": ["rainy commute", "hiking", "travel emergency layer", "running in rain"],
+    "tags": ["rain jacket", "waterproof", "packable", "lightweight", "windbreaker", "breathable"],
+    "sizes": ["S", "M", "L", "XL", "XXL"],
+    "colours": ["matte black", "navy blue", "forest olive"],
+    "specifications": {
+      "weight_kg": 0.22,
+      "waterproof_rating": "10000mm hydrostatic head",
+      "zipper": "YKK Aquaguard"
+    },
+    "availability": "in_stock",
+    "rating": 4.7,
+    "review_count": 420,
+    "shipping_information": {
+      "free_shipping": true,
+      "estimated_days": 2,
+      "shipping_cost": 0.0,
+      "currency": "USD"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0
+    }
+  },
+  {
+    "product_id": "prod_cloth_002",
+    "product_name": "AlpineThermal Merino Wool Base Layer",
+    "brand": "NordicTrail",
+    "category": "clothing",
+    "subcategory": "base_layers",
+    "description": "SAMPLE DEMO DATA: 100% Australian Merino wool 200gsm long-sleeve thermal top with flatlock seams.",
+    "price": 68.00,
+    "currency": "USD",
+    "normalized_price_usd": 68.00,
+    "product_url": "https://demo.shopsense.local/products/merino-baselayer",
+    "image_url": "https://demo.shopsense.local/images/merino.jpg",
+    "source_store": "SampleNordic",
+    "source_product_id": "SKU-CLOTH-002",
+    "attributes": {
+      "material": "100% Merino Wool",
+      "odor_resistant": true,
+      "thermal": true
+    },
+    "use_cases": ["skiing", "winter hiking", "cold weather travel", "daily warm layer"],
+    "tags": ["merino wool", "thermal", "base layer", "warm", "odor resistant", "breathable"],
+    "sizes": ["S", "M", "L", "XL"],
+    "colours": ["charcoal", "black"],
+    "specifications": {
+      "fabric_weight_gsm": 200,
+      "micron": 18.5
+    },
+    "availability": "in_stock",
+    "rating": 4.8,
+    "review_count": 290,
+    "shipping_information": {
+      "free_shipping": true,
+      "estimated_days": 3,
+      "shipping_cost": 0.0,
+      "currency": "USD"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0
+    }
+  },
+  {
+    "product_id": "prod_cloth_003",
+    "product_name": "FlexDry Athletic Training T-Shirt",
+    "brand": "VelocityFit",
+    "category": "clothing",
+    "subcategory": "activewear",
+    "description": "SAMPLE DEMO DATA: Ultra-breathable moisture-wicking workout tee with anti-chafing side vents.",
+    "price": 28.00,
+    "currency": "USD",
+    "normalized_price_usd": 28.00,
+    "product_url": "https://demo.shopsense.local/products/flexdry-tee",
+    "image_url": "https://demo.shopsense.local/images/flexdry.jpg",
+    "source_store": "SampleFitnessDirect",
+    "source_product_id": "SKU-CLOTH-003",
+    "attributes": {
+      "quick_dry": true,
+      "material": "Polyester Spandex Blend"
+    },
+    "use_cases": ["gym", "running", "crossfit", "summer sports"],
+    "tags": ["t-shirt", "workout shirt", "quick dry", "budget", "gym apparel"],
+    "sizes": ["XS", "S", "M", "L", "XL", "XXL"],
+    "colours": ["grey", "cobalt blue", "neon lime"],
+    "specifications": {
+      "weight_kg": 0.12,
+      "upf_rating": 30
+    },
+    "availability": "in_stock",
+    "rating": 4.3,
+    "review_count": 670,
+    "shipping_information": {
+      "free_shipping": false,
+      "estimated_days": 4,
+      "shipping_cost": 4.99,
+      "currency": "USD"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0
+    }
+  },
+  {
+    "product_id": "prod_cloth_004",
+    "product_name": "Expedition 800-Fill Down Parka",
+    "brand": "PolarSummit",
+    "category": "clothing",
+    "subcategory": "winter_coats",
+    "description": "SAMPLE DEMO DATA: Extreme sub-zero winter coat with RDS-certified 800-fill goose down and fleece handwarmers.",
+    "price": 299.99,
+    "currency": "USD",
+    "normalized_price_usd": 299.99,
+    "product_url": "https://demo.shopsense.local/products/expedition-parka",
+    "image_url": "https://demo.shopsense.local/images/downparka.jpg",
+    "source_store": "SampleMountainSupply",
+    "source_product_id": "SKU-CLOTH-004",
+    "attributes": {
+      "insulation": "800 Fill Goose Down",
+      "temp_rating": "-20 Celsius",
+      "hood": "Adjustable storm hood"
+    },
+    "use_cases": ["extreme winter", "snowstorm", "arctic travel", "sub-zero commute"],
+    "tags": ["parka", "down jacket", "heavy coat", "winter outerwear", "warmest"],
+    "sizes": ["M", "L", "XL", "XXL"],
+    "colours": ["midnight black", "navy"],
+    "specifications": {
+      "weight_kg": 0.95,
+      "down_weight_g": 320
+    },
+    "availability": "in_stock",
+    "rating": 4.9,
+    "review_count": 180,
+    "shipping_information": {
+      "free_shipping": true,
+      "estimated_days": 2,
+      "shipping_cost": 0.0,
+      "currency": "USD"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0
+    }
+  },
+  {
+    "product_id": "prod_cloth_005",
+    "product_name": "Commuter Weather-Resistant Stretch Chinos",
+    "brand": "UrbanStride",
+    "category": "clothing",
+    "subcategory": "pants",
+    "description": "SAMPLE DEMO DATA: DWR water-resistant 4-way stretch commuter pants with hidden passport zip pocket. Listed in INR.",
+    "price": 3299.00,
+    "currency": "INR",
+    "normalized_price_usd": 39.59,
+    "product_url": "https://demo.shopsense.local/products/commuter-chinos-inr",
+    "image_url": "https://demo.shopsense.local/images/chinos.jpg",
+    "source_store": "SampleIndiaStore",
+    "source_product_id": "SKU-CLOTH-IN-005",
+    "attributes": {
+      "water_resistant": true,
+      "stretch": "4-way stretch",
+      "fit": "Slim tapered"
+    },
+    "use_cases": ["office commute", "bike commute", "business travel", "casual dinner"],
+    "tags": ["chinos", "pants", "water-resistant", "stretch", "commuter apparel", "inr currency"],
+    "sizes": ["30", "32", "34", "36"],
+    "colours": ["khaki", "charcoal", "navy"],
+    "specifications": {
+      "fabric": "92% Cotton, 8% Elastane",
+      "coating": "Eco DWR"
+    },
+    "availability": "in_stock",
+    "rating": 4.5,
+    "review_count": 240,
+    "shipping_information": {
+      "free_shipping": true,
+      "estimated_days": 3,
+      "shipping_cost": 0.0,
+      "currency": "INR"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0
+    }
+  },
+  {
+    "product_id": "prod_elec_001",
+    "product_name": "ZenBook Ultra 14 Lightweight Laptop",
+    "brand": "Zenith",
+    "category": "electronics",
+    "subcategory": "laptops",
+    "description": "SAMPLE DEMO DATA: Thin & light 14-inch OLED laptop with 16.5-hour battery life and Intel Core Ultra 5 processor.",
+    "price": 899.99,
+    "currency": "USD",
+    "normalized_price_usd": 899.99,
+    "product_url": "https://demo.shopsense.local/products/zenbook-ultra-14",
+    "image_url": "https://demo.shopsense.local/images/zenbook14.jpg",
+    "source_store": "SampleTechDirect",
+    "source_product_id": "SKU-ELEC-001",
+    "attributes": {
+      "portable": true,
+      "screen_type": "2.8K OLED 120Hz",
+      "fast_charge": true
+    },
+    "use_cases": ["programming", "office work", "travel", "college study"],
+    "tags": ["laptop", "lightweight", "programming", "student", "portable", "long battery", "ultrabook"],
+    "sizes": null,
+    "colours": ["space grey", "silver"],
+    "specifications": {
+      "ram_gb": 16,
+      "storage_gb": 512,
+      "cpu": "Intel Core Ultra 5 125H",
+      "screen_size_inch": 14.0,
+      "battery_hours": 16.5,
+      "weight_kg": 1.25,
+      "ports": ["2x Thunderbolt 4", "1x USB-A 3.2", "1x HDMI 2.1"]
+    },
+    "availability": "in_stock",
+    "rating": 4.6,
+    "review_count": 340,
+    "shipping_information": {
+      "free_shipping": true,
+      "estimated_days": 2,
+      "shipping_cost": 0.0,
+      "currency": "USD"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0
+    }
+  },
+  {
+    "product_id": "prod_elec_002",
+    "product_name": "DevBook Pro 16 High-Performance Workstation Laptop",
+    "brand": "Apex",
+    "category": "electronics",
+    "subcategory": "laptops",
+    "description": "SAMPLE DEMO DATA: High core-count workstation laptop with Ryzen 9, 32GB RAM, and vapor chamber cooling.",
+    "price": 1499.00,
+    "currency": "USD",
+    "normalized_price_usd": 1499.00,
+    "product_url": "https://demo.shopsense.local/products/devbook-pro-16",
+    "image_url": "https://demo.shopsense.local/images/devbook16.jpg",
+    "source_store": "SampleTechDirect",
+    "source_product_id": "SKU-ELEC-002",
+    "attributes": {
+      "high_performance": true,
+      "cooling": "Vapor chamber dual-fan",
+      "expandable_ram": true
+    },
+    "use_cases": ["programming", "docker virtualization", "data science", "video editing"],
+    "tags": ["developer", "workstation", "high ram", "32gb ram", "heavy computing", "compilation"],
+    "sizes": null,
+    "colours": ["midnight black"],
+    "specifications": {
+      "ram_gb": 32,
+      "storage_gb": 1024,
+      "cpu": "AMD Ryzen 9 8945HS",
+      "screen_size_inch": 16.0,
+      "battery_hours": 11.0,
+      "weight_kg": 1.88
+    },
+    "availability": "in_stock",
+    "rating": 4.8,
+    "review_count": 820,
+    "shipping_information": {
+      "free_shipping": true,
+      "estimated_days": 1,
+      "shipping_cost": 0.0,
+      "currency": "USD"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0
+    }
+  },
+  {
+    "product_id": "prod_elec_003",
+    "product_name": "AeroBook Air 13 Budget Notebook",
+    "brand": "Aero",
+    "category": "electronics",
+    "subcategory": "laptops",
+    "description": "SAMPLE DEMO DATA: Budget friendly student laptop under $600 with silent fanless thermal design.",
+    "price": 549.99,
+    "currency": "USD",
+    "normalized_price_usd": 549.99,
+    "product_url": "https://demo.shopsense.local/products/aerobook-air-13",
+    "image_url": "https://demo.shopsense.local/images/aerobook.jpg",
+    "source_store": "SampleValueMart",
+    "source_product_id": "SKU-ELEC-003",
+    "attributes": {
+      "silent": true,
+      "budget_friendly": true
+    },
+    "use_cases": ["web browsing", "light office", "online classes", "netflix streaming"],
+    "tags": ["budget", "student", "portable", "cheap laptop", "under 600", "entry level"],
+    "sizes": null,
+    "colours": ["silver"],
+    "specifications": {
+      "ram_gb": 8,
+      "storage_gb": 256,
+      "cpu": "Intel Core i3 13th Gen",
+      "screen_size_inch": 13.3,
+      "battery_hours": 9.0,
+      "weight_kg": 1.30
+    },
+    "availability": "in_stock",
+    "rating": 4.2,
+    "review_count": 185,
+    "shipping_information": {
+      "free_shipping": true,
+      "estimated_days": 4,
+      "shipping_cost": 0.0,
+      "currency": "USD"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0,
+      "notes": "Key benchmark product for strict $600 ceiling testing"
+    }
+  },
+  {
+    "product_id": "prod_elec_004",
+    "product_name": "QuietPulse 750 Over-Ear ANC Headphones",
+    "brand": "Acoustix",
+    "category": "electronics",
+    "subcategory": "headphones",
+    "description": "SAMPLE DEMO DATA: Industry-leading hybrid active noise cancelling headphones with 38 hours of wireless playback.",
+    "price": 279.99,
+    "currency": "USD",
+    "normalized_price_usd": 279.99,
+    "product_url": "https://demo.shopsense.local/products/quietpulse-750",
+    "image_url": "https://demo.shopsense.local/images/qp750.jpg",
+    "source_store": "SampleAudioLounge",
+    "source_product_id": "SKU-ELEC-004",
+    "attributes": {
+      "form_factor": "Over-Ear",
+      "noise_cancellation": true,
+      "multipoint_bluetooth": true
+    },
+    "use_cases": ["airplane travel", "noisy open office", "focus work", "zoom calls"],
+    "tags": ["noise cancelling", "anc", "headphones", "bluetooth", "travel", "long battery"],
+    "sizes": null,
+    "colours": ["matte black", "silver mist", "navy blue"],
+    "specifications": {
+      "battery_hours": 38.0,
+      "weight_kg": 0.24,
+      "bluetooth_version": "5.3",
+      "anc_type": "Hybrid Active Noise Cancellation 4-mic"
+    },
+    "availability": "in_stock",
+    "rating": 4.7,
+    "review_count": 1420,
+    "shipping_information": {
+      "free_shipping": true,
+      "estimated_days": 2,
+      "shipping_cost": 0.0,
+      "currency": "USD"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0
+    }
+  },
+  {
+    "product_id": "prod_elec_005",
+    "product_name": "SonicBuds Sport ANC Earbuds",
+    "brand": "PulseWave",
+    "category": "electronics",
+    "subcategory": "earbuds",
+    "description": "SAMPLE DEMO DATA: IPX7 waterproof sports earbuds with active noise cancellation and wingtip grip.",
+    "price": 129.50,
+    "currency": "USD",
+    "normalized_price_usd": 129.50,
+    "product_url": "https://demo.shopsense.local/products/sonicbuds-sport",
+    "image_url": "https://demo.shopsense.local/images/sonicbuds.jpg",
+    "source_store": "SampleAudioLounge",
+    "source_product_id": "SKU-ELEC-005",
+    "attributes": {
+      "waterproof": true,
+      "noise_cancellation": true,
+      "wireless_charging": true
+    },
+    "use_cases": ["running in rain", "heavy gym workout", "daily commute"],
+    "tags": ["earbuds", "waterproof", "anc", "sports", "running", "ipx7", "wireless"],
+    "sizes": null,
+    "colours": ["graphite", "neon lime", "pure white"],
+    "specifications": {
+      "battery_hours": 28.0,
+      "weight_kg": 0.05,
+      "waterproof_rating": "IPX7 submersible"
+    },
+    "availability": "in_stock",
+    "rating": 4.4,
+    "review_count": 620,
+    "shipping_information": {
+      "free_shipping": true,
+      "estimated_days": 2,
+      "shipping_cost": 0.0,
+      "currency": "USD"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0
+    }
+  },
+  {
+    "product_id": "prod_elec_006",
+    "product_name": "NanoCharge 65W GaN Travel Fast Charger",
+    "brand": "VoltPulse",
+    "category": "electronics",
+    "subcategory": "chargers",
+    "description": "SAMPLE DEMO DATA: Ultra-compact 3-port GaN III wall charger capable of fast-charging laptops and phones simultaneously.",
+    "price": 39.99,
+    "currency": "USD",
+    "normalized_price_usd": 39.99,
+    "product_url": "https://demo.shopsense.local/products/nanocharge-65w",
+    "image_url": "https://demo.shopsense.local/images/charger.jpg",
+    "source_store": "SampleTechDirect",
+    "source_product_id": "SKU-ELEC-006",
+    "attributes": {
+      "fast_charge": true,
+      "gan_tech": true,
+      "foldable_prongs": true
+    },
+    "use_cases": ["travel charging", "laptop power", "minimalist carry"],
+    "tags": ["charger", "gan", "65w", "fast charging", "usb-c", "travel accessory", "compact"],
+    "sizes": null,
+    "colours": ["black", "pure white"],
+    "specifications": {
+      "wattage": 65,
+      "ports": "2x USB-C, 1x USB-A",
+      "weight_kg": 0.11
+    },
+    "availability": "in_stock",
+    "rating": 4.8,
+    "review_count": 940,
+    "shipping_information": {
+      "free_shipping": false,
+      "estimated_days": 3,
+      "shipping_cost": 3.99,
+      "currency": "USD"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0
+    }
+  },
+  {
+    "product_id": "prod_trav_001",
+    "product_name": "SkyRest Memory Foam Ergonomic Travel Pillow",
+    "brand": "AeroComfort",
+    "category": "travel_accessories",
+    "subcategory": "pillows",
+    "description": "SAMPLE DEMO DATA: Contoured 360-degree high-density memory foam neck pillow with washable cool-touch cover.",
+    "price": 34.99,
+    "currency": "USD",
+    "normalized_price_usd": 34.99,
+    "product_url": "https://demo.shopsense.local/products/skyrest-pillow",
+    "image_url": "https://demo.shopsense.local/images/pillow.jpg",
+    "source_store": "SampleTravelDepot",
+    "source_product_id": "SKU-TRAV-001",
+    "attributes": {
+      "ergonomic": true,
+      "washable_cover": true
+    },
+    "use_cases": ["airplane sleep", "long road trips", "train journeys"],
+    "tags": ["travel pillow", "neck support", "memory foam", "airplane sleep", "flight comfort"],
+    "sizes": null,
+    "colours": ["navy blue", "grey"],
+    "specifications": {
+      "weight_kg": 0.32,
+      "fill": "100% Pure Memory Foam"
+    },
+    "availability": "in_stock",
+    "rating": 4.6,
+    "review_count": 890,
+    "shipping_information": {
+      "free_shipping": true,
+      "estimated_days": 2,
+      "shipping_cost": 0.0,
+      "currency": "USD"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0
+    }
+  },
+  {
+    "product_id": "prod_trav_002",
+    "product_name": "GlobalPass Universal All-in-One Travel Adapter",
+    "brand": "VoltPulse",
+    "category": "travel_accessories",
+    "subcategory": "adapters",
+    "description": "SAMPLE DEMO DATA: International travel plug converter working across US, UK, EU, and AU with 20W USB-C PD.",
+    "price": 24.95,
+    "currency": "USD",
+    "normalized_price_usd": 24.95,
+    "product_url": "https://demo.shopsense.local/products/globalpass-adapter",
+    "image_url": "https://demo.shopsense.local/images/adapter.jpg",
+    "source_store": "SampleTravelDepot",
+    "source_product_id": "SKU-TRAV-002",
+    "attributes": {
+      "fuse_protection": true,
+      "universal": true
+    },
+    "use_cases": ["international travel", "hotel stays", "multi-device charging"],
+    "tags": ["travel adapter", "power plug", "international adapter", "usb-c", "budget travel"],
+    "sizes": null,
+    "colours": ["black"],
+    "specifications": {
+      "supported_countries": 150,
+      "weight_kg": 0.14,
+      "max_power": "2000W at 250V"
+    },
+    "availability": "in_stock",
+    "rating": 4.7,
+    "review_count": 1120,
+    "shipping_information": {
+      "free_shipping": true,
+      "estimated_days": 3,
+      "shipping_cost": 0.0,
+      "currency": "USD"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0
+    }
+  },
+  {
+    "product_id": "prod_trav_003",
+    "product_name": "ProPack Ultralight Compression Packing Cubes 6-Set",
+    "brand": "Voyager",
+    "category": "travel_accessories",
+    "subcategory": "packing_organizers",
+    "description": "SAMPLE DEMO DATA: Water-resistant ripstop nylon compression cubes that reduce luggage volume by 40%.",
+    "price": 39.00,
+    "currency": "USD",
+    "normalized_price_usd": 39.00,
+    "product_url": "https://demo.shopsense.local/products/propack-cubes",
+    "image_url": "https://demo.shopsense.local/images/cubes.jpg",
+    "source_store": "SampleTravelDepot",
+    "source_product_id": "SKU-TRAV-003",
+    "attributes": {
+      "compression": true,
+      "water_resistant": true,
+      "pieces": 6
+    },
+    "use_cases": ["carry-on packing", "backpack organization", "business travel"],
+    "tags": ["packing cubes", "compression", "luggage organizer", "ultralight travel", "neat packing"],
+    "sizes": null,
+    "colours": ["grey", "black", "teal"],
+    "specifications": {
+      "material": "Silnylon Ripstop",
+      "weight_kg": 0.22
+    },
+    "availability": "in_stock",
+    "rating": 4.8,
+    "review_count": 650,
+    "shipping_information": {
+      "free_shipping": true,
+      "estimated_days": 2,
+      "shipping_cost": 0.0,
+      "currency": "USD"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0
+    }
+  },
+  {
+    "product_id": "prod_trav_004",
+    "product_name": "ShieldRFID Security Neck Wallet & Passport Holder",
+    "brand": "TravelSafe",
+    "category": "travel_accessories",
+    "subcategory": "security",
+    "description": "SAMPLE DEMO DATA: Concealed anti-theft RFID-blocking neck pouch made from moisture-wicking ripstop.",
+    "price": 18.99,
+    "currency": "USD",
+    "normalized_price_usd": 18.99,
+    "product_url": "https://demo.shopsense.local/products/shield-rfid",
+    "image_url": "https://demo.shopsense.local/images/rfid.jpg",
+    "source_store": "SampleTravelDepot",
+    "source_product_id": "SKU-TRAV-004",
+    "attributes": {
+      "rfid_blocking": true,
+      "concealed": true
+    },
+    "use_cases": ["airport security", "crowded markets", "pickpocket prevention"],
+    "tags": ["rfid", "passport holder", "neck wallet", "anti theft", "budget travel"],
+    "sizes": null,
+    "colours": ["black", "khaki"],
+    "specifications": {
+      "weight_kg": 0.07,
+      "pockets": 5
+    },
+    "availability": "in_stock",
+    "rating": 4.5,
+    "review_count": 480,
+    "shipping_information": {
+      "free_shipping": false,
+      "estimated_days": 3,
+      "shipping_cost": 2.99,
+      "currency": "USD"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0
+    }
+  },
+  {
+    "product_id": "prod_trav_005",
+    "product_name": "BharatYatra Heavy-Duty Luggage Straps with TSA Lock",
+    "brand": "DesiTrek",
+    "category": "travel_accessories",
+    "subcategory": "luggage_straps",
+    "description": "SAMPLE DEMO DATA: Adjustable reinforced cross suitcase strap with integrated 3-dial TSA combination lock. Listed in INR.",
+    "price": 999.00,
+    "currency": "INR",
+    "normalized_price_usd": 11.99,
+    "product_url": "https://demo.shopsense.local/products/luggage-straps-inr",
+    "image_url": "https://demo.shopsense.local/images/straps.jpg",
+    "source_store": "SampleIndiaStore",
+    "source_product_id": "SKU-TRAV-IN-005",
+    "attributes": {
+      "tsa_approved": true,
+      "adjustable": true
+    },
+    "use_cases": ["baggage protection", "international transit", "easy carousel spotting"],
+    "tags": ["luggage strap", "tsa lock", "suitcase belt", "inr currency", "cheap travel accessory"],
+    "sizes": null,
+    "colours": ["flame orange", "black"],
+    "specifications": {
+      "length_cm": 200,
+      "material": "Tough Jacquard Polypropylene"
+    },
+    "availability": "in_stock",
+    "rating": 4.3,
+    "review_count": 310,
+    "shipping_information": {
+      "free_shipping": true,
+      "estimated_days": 3,
+      "shipping_cost": 0.0,
+      "currency": "INR"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0
+    }
+  },
+  {
+    "product_id": "prod_fit_001",
+    "product_name": "TrailLite 2-Person Ultralight Backpacking Tent",
+    "brand": "AlpineTrack",
+    "category": "fitness_outdoor",
+    "subcategory": "camping_tents",
+    "description": "SAMPLE DEMO DATA: Freestanding 3-season double-wall ultralight tent weighing only 1.4kg with DAC aluminum poles.",
+    "price": 219.00,
+    "currency": "USD",
+    "normalized_price_usd": 219.00,
+    "product_url": "https://demo.shopsense.local/products/traillite-tent",
+    "image_url": "https://demo.shopsense.local/images/tent.jpg",
+    "source_store": "SampleMountainSupply",
+    "source_product_id": "SKU-FIT-001",
+    "attributes": {
+      "capacity": "2 Person",
+      "seasons": "3-Season",
+      "freestanding": true
+    },
+    "use_cases": ["thru-hiking", "backpacking", "weekend camping", "trail trekking"],
+    "tags": ["tent", "ultralight", "backpacking tent", "camping gear", "lightweight shelter"],
+    "sizes": null,
+    "colours": ["forest olive", "flame orange"],
+    "specifications": {
+      "weight_kg": 1.40,
+      "floor_area_sqm": 2.6,
+      "waterproof_rating": "3000mm PU Coated Silnylon"
+    },
+    "availability": "in_stock",
+    "rating": 4.8,
+    "review_count": 275,
+    "shipping_information": {
+      "free_shipping": true,
+      "estimated_days": 3,
+      "shipping_cost": 0.0,
+      "currency": "USD"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0
+    }
+  },
+  {
+    "product_id": "prod_fit_002",
+    "product_name": "HydroFlow 32oz Insulated Stainless Steel Bottle",
+    "brand": "HydroFlow",
+    "category": "fitness_outdoor",
+    "subcategory": "hydration",
+    "description": "SAMPLE DEMO DATA: Double-wall vacuum insulated wide-mouth sports flask that keeps water ice cold for 24 hours.",
+    "price": 29.99,
+    "currency": "USD",
+    "normalized_price_usd": 29.99,
+    "product_url": "https://demo.shopsense.local/products/hydroflow-32oz",
+    "image_url": "https://demo.shopsense.local/images/bottle.jpg",
+    "source_store": "SampleFitnessDirect",
+    "source_product_id": "SKU-FIT-002",
+    "attributes": {
+      "bpa_free": true,
+      "cold_retention_hours": 24,
+      "leakproof": true
+    },
+    "use_cases": ["gym hydration", "hiking", "desk water bottle", "daily travel"],
+    "tags": ["water bottle", "insulated", "stainless steel", "gym", "hiking bottle", "bpa free"],
+    "sizes": ["32oz"],
+    "colours": ["matte black", "sage green", "cobalt blue"],
+    "specifications": {
+      "capacity_liters": 0.95,
+      "weight_kg": 0.39,
+      "steel_grade": "18/8 Pro Grade Stainless"
+    },
+    "availability": "in_stock",
+    "rating": 4.9,
+    "review_count": 1850,
+    "shipping_information": {
+      "free_shipping": true,
+      "estimated_days": 2,
+      "shipping_cost": 0.0,
+      "currency": "USD"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0
+    }
+  },
+  {
+    "product_id": "prod_fit_003",
+    "product_name": "GripTech High-Density Non-Slip Yoga Mat 6mm",
+    "brand": "ZenForm",
+    "category": "fitness_outdoor",
+    "subcategory": "yoga_mats",
+    "description": "SAMPLE DEMO DATA: Eco-friendly natural tree rubber yoga mat with laser-etched alignment system and superior grip.",
+    "price": 48.00,
+    "currency": "USD",
+    "normalized_price_usd": 48.00,
+    "product_url": "https://demo.shopsense.local/products/griptech-yoga-mat",
+    "image_url": "https://demo.shopsense.local/images/yogamat.jpg",
+    "source_store": "SampleFitnessDirect",
+    "source_product_id": "SKU-FIT-003",
+    "attributes": {
+      "non_slip": true,
+      "eco_friendly": true,
+      "alignment_lines": true
+    },
+    "use_cases": ["hot yoga", "pilates", "home stretching", "floor mobility"],
+    "tags": ["yoga mat", "non slip", "pilates", "exercise mat", "cushioned floor"],
+    "sizes": null,
+    "colours": ["sage green", "black", "navy blue"],
+    "specifications": {
+      "thickness_mm": 6.0,
+      "weight_kg": 1.85,
+      "dimensions_cm": "183 x 66"
+    },
+    "availability": "in_stock",
+    "rating": 4.7,
+    "review_count": 520,
+    "shipping_information": {
+      "free_shipping": true,
+      "estimated_days": 3,
+      "shipping_cost": 0.0,
+      "currency": "USD"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0
+    }
+  },
+  {
+    "product_id": "prod_fit_004",
+    "product_name": "PeakTrek Carbon Fiber Folding Trekking Poles",
+    "brand": "AlpineTrack",
+    "category": "fitness_outdoor",
+    "subcategory": "trekking_poles",
+    "description": "SAMPLE DEMO DATA: 100% carbon fiber 3-section quick flick-lock hiking poles with natural cork grips.",
+    "price": 65.00,
+    "currency": "USD",
+    "normalized_price_usd": 65.00,
+    "product_url": "https://demo.shopsense.local/products/peaktrek-poles",
+    "image_url": "https://demo.shopsense.local/images/poles.jpg",
+    "source_store": "SampleMountainSupply",
+    "source_product_id": "SKU-FIT-004",
+    "attributes": {
+      "collapsible": true,
+      "cork_grip": true
+    },
+    "use_cases": ["knee relief on descents", "trail hiking", "snowshoeing", "mountain trekking"],
+    "tags": ["trekking poles", "hiking sticks", "carbon fiber", "ultralight hiking", "knee support"],
+    "sizes": null,
+    "colours": ["black rock", "crimson"],
+    "specifications": {
+      "weight_kg": 0.42,
+      "collapsed_length_cm": 36,
+      "extended_length_cm": 130
+    },
+    "availability": "in_stock",
+    "rating": 4.6,
+    "review_count": 390,
+    "shipping_information": {
+      "free_shipping": true,
+      "estimated_days": 2,
+      "shipping_cost": 0.0,
+      "currency": "USD"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0
+    }
+  },
+  {
+    "product_id": "prod_fit_005",
+    "product_name": "CoreStrength Dial Adjustable Dumbbell Pair",
+    "brand": "IronForge",
+    "category": "fitness_outdoor",
+    "subcategory": "weights",
+    "description": "SAMPLE DEMO DATA: Space-saving rapid dial selector dumbbells replacing 15 sets of free weights. Listed in INR.",
+    "price": 24999.00,
+    "currency": "INR",
+    "normalized_price_usd": 299.99,
+    "product_url": "https://demo.shopsense.local/products/dumbbells-inr",
+    "image_url": "https://demo.shopsense.local/images/dumbbells.jpg",
+    "source_store": "SampleIndiaStore",
+    "source_product_id": "SKU-FIT-IN-005",
+    "attributes": {
+      "adjustable": true,
+      "space_saving": true
+    },
+    "use_cases": ["home gym", "strength training", "bicep curls", "chest press"],
+    "tags": ["dumbbells", "weights", "home gym", "strength training", "inr currency"],
+    "sizes": null,
+    "colours": ["black"],
+    "specifications": {
+      "weight_range_lbs": "5 to 52.5 lbs per dumbbell",
+      "mechanism": "Mechanical Gear Dial"
+    },
+    "availability": "in_stock",
+    "rating": 4.7,
+    "review_count": 410,
+    "shipping_information": {
+      "free_shipping": false,
+      "estimated_days": 5,
+      "shipping_cost": 499.00,
+      "currency": "INR"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0
+    }
+  },
+  {
+    "product_id": "prod_home_001",
+    "product_name": "AeroBlend Pro 1200W Countertop Blender",
+    "brand": "KitchenCraft",
+    "category": "home_kitchen",
+    "subcategory": "blenders",
+    "description": "SAMPLE DEMO DATA: High-torque 1200W commercial motor blender for smoothies, crushed ice, and hot soups.",
+    "price": 119.99,
+    "currency": "USD",
+    "normalized_price_usd": 119.99,
+    "product_url": "https://demo.shopsense.local/products/aeroblend-pro",
+    "image_url": "https://demo.shopsense.local/images/blender.jpg",
+    "source_store": "SampleKitchenWorld",
+    "source_product_id": "SKU-HOME-001",
+    "attributes": {
+      "ice_crushing": true,
+      "bpa_free_pitcher": true,
+      "variable_speed": true
+    },
+    "use_cases": ["smoothies", "protein shakes", "crushing ice", "soups and sauces"],
+    "tags": ["blender", "smoothie maker", "kitchen appliance", "1200w", "countertop blender"],
+    "sizes": null,
+    "colours": ["matte black", "silver"],
+    "specifications": {
+      "wattage": 1200,
+      "capacity_liters": 1.9,
+      "blades": "6-point hardened stainless steel"
+    },
+    "availability": "in_stock",
+    "rating": 4.6,
+    "review_count": 640,
+    "shipping_information": {
+      "free_shipping": true,
+      "estimated_days": 3,
+      "shipping_cost": 0.0,
+      "currency": "USD"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0
+    }
+  },
+  {
+    "product_id": "prod_home_002",
+    "product_name": "BaristaTouch 15-Bar Compact Espresso Machine",
+    "brand": "CaffeViva",
+    "category": "home_kitchen",
+    "subcategory": "coffee_machines",
+    "description": "SAMPLE DEMO DATA: Italian 15-bar pump espresso maker with manual steam wand for lattes and cappuccinos.",
+    "price": 199.95,
+    "currency": "USD",
+    "normalized_price_usd": 199.95,
+    "product_url": "https://demo.shopsense.local/products/baristatouch-espresso",
+    "image_url": "https://demo.shopsense.local/images/espresso.jpg",
+    "source_store": "SampleKitchenWorld",
+    "source_product_id": "SKU-HOME-002",
+    "attributes": {
+      "milk_frother": true,
+      "compact_footprint": true
+    },
+    "use_cases": ["morning espresso", "latte art", "cappuccino", "entertaining guests"],
+    "tags": ["espresso machine", "coffee maker", "latte", "cappuccino", "barista coffee"],
+    "sizes": null,
+    "colours": ["silver", "black"],
+    "specifications": {
+      "pressure_bar": 15,
+      "water_tank_liters": 1.2,
+      "thermoblock_heating": true
+    },
+    "availability": "in_stock",
+    "rating": 4.7,
+    "review_count": 480,
+    "shipping_information": {
+      "free_shipping": true,
+      "estimated_days": 2,
+      "shipping_cost": 0.0,
+      "currency": "USD"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0
+    }
+  },
+  {
+    "product_id": "prod_home_003",
+    "product_name": "CastIron 10-Inch Pre-Seasoned Skillet",
+    "brand": "LodgeCraft",
+    "category": "home_kitchen",
+    "subcategory": "cookware",
+    "description": "SAMPLE DEMO DATA: Heavyweight heirloom cast iron frying pan pre-seasoned with 100% natural vegetable oil.",
+    "price": 26.50,
+    "currency": "USD",
+    "normalized_price_usd": 26.50,
+    "product_url": "https://demo.shopsense.local/products/castiron-skillet",
+    "image_url": "https://demo.shopsense.local/images/skillet.jpg",
+    "source_store": "SampleKitchenWorld",
+    "source_product_id": "SKU-HOME-003",
+    "attributes": {
+      "oven_safe": true,
+      "pre_seasoned": true,
+      "induction_ready": true
+    },
+    "use_cases": ["searing steak", "baking cornbread", "camping cooking", "stovetop frying"],
+    "tags": ["cast iron", "skillet", "frying pan", "cookware", "budget cooking", "durable"],
+    "sizes": ["10-inch"],
+    "colours": ["black"],
+    "specifications": {
+      "weight_kg": 2.20,
+      "max_temp_f": 500,
+      "material": "Cast Iron"
+    },
+    "availability": "in_stock",
+    "rating": 4.9,
+    "review_count": 3200,
+    "shipping_information": {
+      "free_shipping": false,
+      "estimated_days": 3,
+      "shipping_cost": 5.99,
+      "currency": "USD"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0
+    }
+  },
+  {
+    "product_id": "prod_home_004",
+    "product_name": "ChaiCraft Variable-Temperature Gooseneck Electric Kettle",
+    "brand": "AromaBlend",
+    "category": "home_kitchen",
+    "subcategory": "kettles",
+    "description": "SAMPLE DEMO DATA: Precision pour-over electric kettle with 1-degree temperature control and 60-minute keep warm. Listed in INR.",
+    "price": 2899.00,
+    "currency": "INR",
+    "normalized_price_usd": 34.79,
+    "product_url": "https://demo.shopsense.local/products/gooseneck-kettle-inr",
+    "image_url": "https://demo.shopsense.local/images/kettle.jpg",
+    "source_store": "SampleIndiaStore",
+    "source_product_id": "SKU-HOME-IN-004",
+    "attributes": {
+      "gooseneck_spout": true,
+      "temp_control": true,
+      "auto_shutoff": true
+    },
+    "use_cases": ["pour over coffee", "green tea", "chai brewing", "instant oatmeal"],
+    "tags": ["electric kettle", "gooseneck", "tea maker", "pour over", "inr currency"],
+    "sizes": null,
+    "colours": ["matte black"],
+    "specifications": {
+      "capacity_liters": 1.0,
+      "wattage": 1200,
+      "interior_steel": "Food Grade 304 Stainless"
+    },
+    "availability": "in_stock",
+    "rating": 4.7,
+    "review_count": 490,
+    "shipping_information": {
+      "free_shipping": true,
+      "estimated_days": 3,
+      "shipping_cost": 0.0,
+      "currency": "INR"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0
+    }
+  },
+  {
+    "product_id": "prod_bag_001",
+    "product_name": "Nomad 30L Weatherproof Travel Backpack",
+    "brand": "Voyager",
+    "category": "bags_accessories",
+    "subcategory": "travel_backpacks",
+    "description": "SAMPLE DEMO DATA: Clamshell carry-on travel pack with dedicated 16-inch padded laptop compartment and AquaGuard zips.",
+    "price": 109.95,
+    "currency": "USD",
+    "normalized_price_usd": 109.95,
+    "product_url": "https://demo.shopsense.local/products/nomad-30l",
+    "image_url": "https://demo.shopsense.local/images/nomad30.jpg",
+    "source_store": "SampleLuggageHub",
+    "source_product_id": "SKU-BAG-001",
+    "attributes": {
+      "waterproof": true,
+      "laptop_sleeve": true,
+      "luggage_pass_through": true
+    },
+    "use_cases": ["one-bag travel", "weekend trips", "tech commute", "digital nomad"],
+    "tags": ["backpack", "travel bag", "waterproof", "carry on", "laptop backpack", "30l"],
+    "sizes": ["30L"],
+    "colours": ["charcoal heather", "navy", "coyote tan"],
+    "specifications": {
+      "capacity_liters": 30,
+      "laptop_sleeve_inch": 16.0,
+      "weight_kg": 0.95,
+      "dimensions_cm": "48 x 30 x 18"
+    },
+    "availability": "in_stock",
+    "rating": 4.8,
+    "review_count": 430,
+    "shipping_information": {
+      "free_shipping": true,
+      "estimated_days": 2,
+      "shipping_cost": 0.0,
+      "currency": "USD"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0
+    }
+  },
+  {
+    "product_id": "prod_bag_002",
+    "product_name": "CitySlicker Minimalist 15-Inch Commuter Backpack",
+    "brand": "UrbanStride",
+    "category": "bags_accessories",
+    "subcategory": "commuter_backpacks",
+    "description": "SAMPLE DEMO DATA: Slim water-resistant work backpack with hidden anti-theft back pocket and key leash.",
+    "price": 79.00,
+    "currency": "USD",
+    "normalized_price_usd": 79.00,
+    "product_url": "https://demo.shopsense.local/products/cityslicker-15",
+    "image_url": "https://demo.shopsense.local/images/cityslicker.jpg",
+    "source_store": "SampleLuggageHub",
+    "source_product_id": "SKU-BAG-002",
+    "attributes": {
+      "water_resistant": true,
+      "anti_theft_pocket": true
+    },
+    "use_cases": ["subway commute", "office bag", "coffee shop work"],
+    "tags": ["backpack", "commuter", "slim backpack", "laptop bag", "minimalist"],
+    "sizes": ["20L"],
+    "colours": ["matte black", "grey"],
+    "specifications": {
+      "capacity_liters": 20,
+      "laptop_sleeve_inch": 15.6,
+      "weight_kg": 0.68
+    },
+    "availability": "in_stock",
+    "rating": 4.5,
+    "review_count": 280,
+    "shipping_information": {
+      "free_shipping": true,
+      "estimated_days": 3,
+      "shipping_cost": 0.0,
+      "currency": "USD"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0
+    }
+  },
+  {
+    "product_id": "prod_bag_003",
+    "product_name": "ApexRidge 55L Technical Hiking Backpack",
+    "brand": "AlpineTrack",
+    "category": "bags_accessories",
+    "subcategory": "hiking_backpacks",
+    "description": "SAMPLE DEMO DATA: Multi-day trail pack with adjustable torso internal aluminum frame and integrated high-viz rain cover.",
+    "price": 189.00,
+    "currency": "USD",
+    "normalized_price_usd": 189.00,
+    "product_url": "https://demo.shopsense.local/products/apexridge-55l",
+    "image_url": "https://demo.shopsense.local/images/apexridge.jpg",
+    "source_store": "SampleMountainSupply",
+    "source_product_id": "SKU-BAG-003",
+    "attributes": {
+      "internal_frame": true,
+      "rain_cover_included": true,
+      "hydration_compatible": true
+    },
+    "use_cases": ["3-5 day backpacking", "mountain expeditions", "thru-hiking"],
+    "tags": ["backpack", "hiking backpack", "55l", "internal frame", "camping pack", "durable"],
+    "sizes": ["55L"],
+    "colours": ["forest olive", "cobalt blue"],
+    "specifications": {
+      "capacity_liters": 55,
+      "weight_kg": 1.75,
+      "frame_material": "7075 Aluminum"
+    },
+    "availability": "in_stock",
+    "rating": 4.8,
+    "review_count": 395,
+    "shipping_information": {
+      "free_shipping": true,
+      "estimated_days": 3,
+      "shipping_cost": 0.0,
+      "currency": "USD"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0
+    }
+  },
+  {
+    "product_id": "prod_bag_004",
+    "product_name": "Heritage Waxed Canvas 45L Weekend Duffel",
+    "brand": "Voyager",
+    "category": "bags_accessories",
+    "subcategory": "duffel_bags",
+    "description": "SAMPLE DEMO DATA: Weather-resistant 18oz heavy waxed cotton canvas weekender with solid brass rivets and leather handles.",
+    "price": 135.00,
+    "currency": "USD",
+    "normalized_price_usd": 135.00,
+    "product_url": "https://demo.shopsense.local/products/heritage-duffel",
+    "image_url": "https://demo.shopsense.local/images/duffel.jpg",
+    "source_store": "SampleLuggageHub",
+    "source_product_id": "SKU-BAG-004",
+    "attributes": {
+      "water_repellent": true,
+      "carry_on_compliant": true
+    },
+    "use_cases": ["road trips", "gym duffel", "weekend getaway", "flight carry on"],
+    "tags": ["duffel bag", "waxed canvas", "weekender", "travel bag", "vintage style"],
+    "sizes": ["45L"],
+    "colours": ["forest olive", "khaki"],
+    "specifications": {
+      "capacity_liters": 45,
+      "weight_kg": 1.15,
+      "hardware": "Solid Antique Brass"
+    },
+    "availability": "in_stock",
+    "rating": 4.7,
+    "review_count": 210,
+    "shipping_information": {
+      "free_shipping": true,
+      "estimated_days": 2,
+      "shipping_cost": 0.0,
+      "currency": "USD"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0
+    }
+  },
+  {
+    "product_id": "prod_cloth_006",
+    "product_name": "Everyday Organic Cotton Crewneck Sweatshirt",
+    "brand": "EcoWear",
+    "category": "clothing",
+    "subcategory": "sweatshirts",
+    "description": "SAMPLE DEMO DATA: 100% GOTS certified organic combed ring-spun cotton fleece pullover.",
+    "price": 45.00,
+    "currency": "USD",
+    "normalized_price_usd": 45.00,
+    "product_url": "https://demo.shopsense.local/products/organic-crewneck",
+    "image_url": "https://demo.shopsense.local/images/crewneck.jpg",
+    "source_store": "SampleValueMart",
+    "source_product_id": "SKU-CLOTH-006",
+    "attributes": {
+      "material": "100% Organic Cotton",
+      "eco_friendly": true
+    },
+    "use_cases": ["casual lounging", "work from home", "mild autumn walk"],
+    "tags": ["sweatshirt", "cotton", "organic", "crewneck", "pullover", "budget"],
+    "sizes": ["S", "M", "L", "XL"],
+    "colours": ["charcoal heather", "sage green", "navy"],
+    "specifications": {
+      "fabric_weight_gsm": 320
+    },
+    "availability": "in_stock",
+    "rating": 4.5,
+    "review_count": 380,
+    "shipping_information": {
+      "free_shipping": true,
+      "estimated_days": 3,
+      "shipping_cost": 0.0,
+      "currency": "USD"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0
+    }
+  },
+  {
+    "product_id": "prod_bag_005",
+    "product_name": "CitySlicker 15-Inch Commuter Backpack (Partner Listing)",
+    "brand": "UrbanStride",
+    "category": "bags_accessories",
+    "subcategory": "commuter_backpacks",
+    "description": "SAMPLE DEMO DATA: Alternate merchant listing of CitySlicker work backpack to verify duplicate detection algorithms.",
+    "price": 84.99,
+    "currency": "USD",
+    "normalized_price_usd": 84.99,
+    "product_url": "https://demo.shopsense.local/products/cityslicker-partner",
+    "image_url": "https://demo.shopsense.local/images/cityslicker.jpg",
+    "source_store": "PartnerBagsDirect",
+    "source_product_id": "SKU-BAG-002",
+    "attributes": {
+      "water_resistant": true
+    },
+    "use_cases": ["subway commute", "office bag"],
+    "tags": ["backpack", "commuter", "duplicate test"],
+    "sizes": ["20L"],
+    "colours": ["matte black"],
+    "specifications": {
+      "capacity_liters": 20,
+      "laptop_sleeve_inch": 15.6
+    },
+    "availability": "in_stock",
+    "rating": 4.5,
+    "review_count": 42,
+    "shipping_information": {
+      "free_shipping": false,
+      "estimated_days": 4,
+      "shipping_cost": 4.99,
+      "currency": "USD"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 0.95,
+      "notes": "Duplicate product entry with identical SKU-BAG-002 for test verification"
+    }
+  },
+  {
+    "product_id": "prod_elec_007",
+    "product_name": "SmartView 2K Weatherproof Wireless Security Camera",
+    "brand": "SafeHaven",
+    "category": "electronics",
+    "subcategory": "smart_home",
+    "description": "SAMPLE DEMO DATA: Solar-compatible battery outdoor camera with color night vision and AI person detection.",
+    "price": 79.99,
+    "currency": "USD",
+    "normalized_price_usd": 79.99,
+    "product_url": "https://demo.shopsense.local/products/smartview-2k",
+    "image_url": "https://demo.shopsense.local/images/camera.jpg",
+    "source_store": "SampleTechDirect",
+    "source_product_id": "SKU-ELEC-007",
+    "attributes": {
+      "waterproof": true,
+      "night_vision": true,
+      "wire_free": true
+    },
+    "use_cases": ["home security", "front porch monitoring", "backyard security"],
+    "tags": ["security camera", "outdoor camera", "wireless", "2k", "smart home"],
+    "sizes": null,
+    "colours": ["white"],
+    "specifications": {
+      "resolution": "2K QHD",
+      "battery_months": 4.0,
+      "field_of_view_degrees": 130
+    },
+    "availability": "in_stock",
+    "rating": 4.5,
+    "review_count": 510,
+    "shipping_information": {
+      "free_shipping": true,
+      "estimated_days": 2,
+      "shipping_cost": 0.0,
+      "currency": "USD"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0
+    }
+  },
+  {
+    "product_id": "prod_foot_007",
+    "product_name": "BreezeSlip Knit Casual Slip-On Walking Shoes",
+    "brand": "MetroStep",
+    "category": "footwear",
+    "subcategory": "casual_shoes",
+    "description": "SAMPLE DEMO DATA: Easy-on breathable stretch knit slip-on loafers for airport transit and daily walking.",
+    "price": 52.00,
+    "currency": "USD",
+    "normalized_price_usd": 52.00,
+    "product_url": "https://demo.shopsense.local/products/breezeslip",
+    "image_url": "https://demo.shopsense.local/images/breezeslip.jpg",
+    "source_store": "SampleRunnerStore",
+    "source_product_id": "SKU-FOOT-007",
+    "attributes": {
+      "slip_on": true,
+      "breathable": true,
+      "machine_washable": true
+    },
+    "use_cases": ["airport security transit", "daily dog walking", "casual errands"],
+    "tags": ["slip on", "walking shoes", "breathable", "lightweight shoes", "comfortable loafer"],
+    "sizes": ["8", "8.5", "9", "9.5", "10", "11"],
+    "colours": ["grey", "navy blue", "black"],
+    "specifications": {
+      "weight_kg": 0.21,
+      "insole": "Memory foam cushioned"
+    },
+    "availability": "in_stock",
+    "rating": 4.6,
+    "review_count": 730,
+    "shipping_information": {
+      "free_shipping": true,
+      "estimated_days": 3,
+      "shipping_cost": 0.0,
+      "currency": "USD"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0
+    }
+  },
+  {
+    "product_id": "prod_fit_006",
+    "product_name": "FlexLoop Fabric Resistance Bands 5-Pack with Door Anchor",
+    "brand": "VelocityFit",
+    "category": "fitness_outdoor",
+    "subcategory": "resistance_bands",
+    "description": "SAMPLE DEMO DATA: Anti-slip fabric booty and pull-up assist bands with travel carry bag.",
+    "price": 19.99,
+    "currency": "USD",
+    "normalized_price_usd": 19.99,
+    "product_url": "https://demo.shopsense.local/products/flexloop-bands",
+    "image_url": "https://demo.shopsense.local/images/bands.jpg",
+    "source_store": "SampleFitnessDirect",
+    "source_product_id": "SKU-FIT-006",
+    "attributes": {
+      "anti_roll": true,
+      "fabric_cotton": true,
+      "levels": 5
+    },
+    "use_cases": ["hotel workout", "glute activation", "physical therapy", "home pilates"],
+    "tags": ["resistance bands", "fabric bands", "home workout", "budget fitness", "travel workout"],
+    "sizes": null,
+    "colours": ["grey", "sage green", "teal"],
+    "specifications": {
+      "weight_kg": 0.25,
+      "resistance_range_lbs": "10 to 50 lbs"
+    },
+    "availability": "in_stock",
+    "rating": 4.8,
+    "review_count": 1420,
+    "shipping_information": {
+      "free_shipping": false,
+      "estimated_days": 2,
+      "shipping_cost": 2.99,
+      "currency": "USD"
+    },
+    "last_verified_at": "2026-10-24T10:00:00Z",
+    "data_source_type": "local_demo",
+    "provenance": {
+      "is_sample_data": true,
+      "data_source_type": "local_demo",
+      "verified": false,
+      "confidence_score": 1.0
+    }
+  }
+]

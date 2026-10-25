@@ -1,0 +1,28 @@
+{
+  "name": "shopsense-extension",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "ShopSense AI — Conversational Shopping Assistant Chrome Extension",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test:extraction": "npx tsx src/extraction/__tests__/run_extraction_tests.ts"
+  },
+  "dependencies": {
+    "lucide-react": "^0.475.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.287",
+    "@types/jsdom": "^30.0.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "jsdom": "^29.1.1",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  }
+}
