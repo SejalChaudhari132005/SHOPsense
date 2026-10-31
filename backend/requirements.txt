@@ -12,6 +12,11 @@ langgraph>=0.2.20
 langchain-core>=0.3.0
 groq>=0.11.0
 
+# Local hybrid product retrieval
+rank-bm25>=0.2.2,<0.3
+fastembed>=0.7.4,<1
+faiss-cpu>=1.15.1,<2
+
 # Persistence & Storage
 aiosqlite>=0.20.0
 

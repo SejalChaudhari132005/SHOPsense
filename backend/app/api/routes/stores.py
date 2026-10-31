@@ -1,7 +1,4 @@
-"""
-ShopSense AI — Store Status & Multi-Store Discovery Endpoint
-Exposes GET /api/stores/status and POST /api/stores/search for multi-store visibility.
-"""
+"""Expose the local mock catalog's status and search endpoints."""
 
 from typing import List, Optional
 from fastapi import APIRouter
@@ -27,7 +24,7 @@ class MultiStoreSearchRequest(BaseModel):
     query: str
     category: Optional[str] = None
     budget_max: Optional[float] = None
-    currency: Optional[str] = "USD"
+    currency: Optional[str] = "INR"
     limit_per_store: int = Field(default=8, ge=1, le=50)
     enabled_stores: Optional[List[str]] = None
 
@@ -45,13 +42,7 @@ class MultiStoreSearchResponse(BaseModel):
 
 @router.get("/status", response_model=StoreStatusResponse)
 async def get_store_statuses():
-    """
-    Returns a truthful integration status table distinguishing:
-    - Live and verified
-    - Configured but not verified
-    - Mocked demonstration
-    - Not yet accessible
-    """
+    """Return the configured catalog source status."""
     statuses = adapter_registry.get_all_statuses()
     live_count = sum(1 for s in statuses if s.status.value == "live_verified")
     conf_unverified = sum(1 for s in statuses if s.status.value == "configured_unverified")
@@ -70,9 +61,7 @@ async def get_store_statuses():
 
 @router.post("/search", response_model=MultiStoreSearchResponse)
 async def search_multi_store(request: MultiStoreSearchRequest):
-    """
-    Dispatches a parallel multi-store search across all configured retail adapters.
-    """
+    """Search the configured local mock catalog."""
     result = await adapter_registry.search_all(
         query=request.query,
         category=request.category,

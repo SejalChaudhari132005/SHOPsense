@@ -469,7 +469,7 @@ def test_scenario_15_complementary_product_suggestions():
     assert "packing" in suggestion.product.product_name.lower() or "cube" in suggestion.product.product_name.lower()
     assert suggestion.why_relevant is not None
     assert suggestion.is_pushy is False
-    assert "Verified" in suggestion.data_provenance
+    assert suggestion.data_provenance == "Demo sample data"
 
 
 # ==========================================

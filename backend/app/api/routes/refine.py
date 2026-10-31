@@ -8,6 +8,7 @@ from fastapi import APIRouter
 from app.models.api_schemas import RefineRequest
 from app.models.state import OrchestratorResponse, ExtractedIntent
 from app.agents.orchestrator import shared_orchestrator as orchestrator
+from app.services.currency_service import convert_currency
 
 router = APIRouter(prefix="/api/refine", tags=["Refine"])
 
@@ -23,8 +24,9 @@ async def refine_session_constraints(request: RefineRequest):
 
     # Apply explicit mutations
     if request.new_budget_max is not None:
-        intent.budget_max = request.new_budget_max
-        intent.budget_currency = request.new_budget_currency or intent.budget_currency
+        currency = (request.new_budget_currency or "INR").upper()
+        intent.budget_max = convert_currency(request.new_budget_max, currency, "INR")
+        intent.budget_currency = "INR"
         intent.is_budget_strict = True
 
     if request.new_colour:

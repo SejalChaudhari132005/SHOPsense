@@ -14,7 +14,7 @@ import re
 from typing import List, Optional, Dict, Any, Tuple
 from app.models.state import ExtractedIntent, ClarificationDecision
 from app.models.product import Product
-from app.services.catalog_service import load_and_validate_catalog
+from app.services.catalog_service import canonicalize_category, load_and_validate_catalog
 
 
 AMBIGUOUS_PHRASES = [
@@ -27,6 +27,11 @@ KNOWN_CONFLICT_PAIRS = [
     ({"budget", "cheap"}, {"luxury", "flagship", "high-end", "premium"}),
     ({"waterproof", "submersible"}, {"open-mesh", "mesh sandals", "breathable canvas"}),
 ]
+
+CATEGORY_REQUIRED_ATTRIBUTES = {
+    "footwear": ("size",),
+    "clothing": ("size",),
+}
 
 
 class AmbiguityClarificationAgent:
@@ -91,13 +96,63 @@ class AmbiguityClarificationAgent:
 
         return conflicts
 
-    def check_catalog_coverage(self, category: Optional[str]) -> bool:
-        """Verifies if catalog contains products under the target category."""
+    def available_categories(self) -> List[str]:
+        """Return the catalog's distinct product categories."""
+        return sorted({product.category for product in self._get_catalog()})
+
+    @staticmethod
+    def _category_label(category: str) -> str:
+        labels = {
+            "beauty_personal_care": "Beauty & Personal Care",
+            "fashion_accessories": "Fashion Accessories",
+            "fitness_outdoor": "Fitness & Outdoor",
+            "home_kitchen": "Home & Kitchen",
+            "bags_accessories": "Bags & Accessories",
+        }
+        return labels.get(category, category.replace("_", " ").title())
+
+    def check_catalog_coverage(
+        self,
+        category: Optional[str],
+        subcategory: Optional[str] = None,
+    ) -> bool:
+        """Verify that the catalog supports the requested category and product type."""
         if not category:
             return True
         catalog = self._get_catalog()
-        cat_lower = category.lower()
-        return any(cat_lower in p.category.lower() or cat_lower in " ".join(p.tags).lower() for p in catalog)
+        canonical_category = canonicalize_category(category)
+        category_products = [
+            product for product in catalog
+            if canonicalize_category(product.category) == canonical_category
+        ]
+        if not category_products:
+            return False
+        if not subcategory:
+            return True
+
+        requested_terms = re.findall(r"[a-z0-9]+", subcategory.lower())
+        if not requested_terms:
+            return True
+        requested_terms = [
+            term[:-1] if len(term) > 3 and term.endswith("s") else term
+            for term in requested_terms
+        ]
+        for product in category_products:
+            catalog_text = " ".join([
+                product.subcategory or "",
+                product.product_name,
+                product.description,
+                *product.tags,
+                *product.use_cases,
+            ]).lower()
+            catalog_terms = set(re.findall(r"[a-z0-9]+", catalog_text))
+            catalog_terms.update(
+                term[:-1] for term in list(catalog_terms)
+                if len(term) > 3 and term.endswith("s")
+            )
+            if all(term in catalog_terms for term in requested_terms):
+                return True
+        return False
 
     def evaluate(
         self,
@@ -106,15 +161,49 @@ class AmbiguityClarificationAgent:
         raw_user_message: str = ""
     ) -> ClarificationDecision:
         asked = already_asked_questions or []
+        if intent.shopping_intent == "category_discovery":
+            return ClarificationDecision(
+                needs_clarification=False,
+                completeness_score=1.0,
+                confidence_score=1.0,
+                decision_reason="Category discovery is answerable from catalog metadata.",
+                reason="Category discovery is answerable from catalog metadata.",
+            )
         missing_critical: List[str] = []
         ambiguity_factors: List[str] = []
 
         # 1. Required-field completeness (0.0 to 1.0)
         completeness = 0.0
-        if intent.category or intent.intended_use:
+        missing_category_attributes: List[str] = []
+        page_analysis_anchor = bool(intent.page_analysis_requested and intent.page_product)
+        named_comparison = (
+            intent.purchase_intent == "comparison"
+            and len(intent.comparison_product_ids) >= 2
+        )
+        has_search_anchor = bool(
+            intent.category
+            or intent.category_hint
+            or page_analysis_anchor
+            or named_comparison
+            or intent.intended_use
+            or intent.health_considerations
+        )
+        if has_search_anchor:
             completeness += 0.40
         else:
             missing_critical.append("category_or_use_case")
+
+        if named_comparison:
+            completeness += 0.25
+
+        if page_analysis_anchor:
+            completeness += 0.25
+
+        category = canonicalize_category(intent.category) if intent.category else None
+        if intent.purchase_intent == "gift" and category in CATEGORY_REQUIRED_ATTRIBUTES:
+            if "size" in CATEGORY_REQUIRED_ATTRIBUTES[category] and not intent.size:
+                missing_category_attributes.append("recipient_size")
+                missing_critical.append("recipient_size")
 
         if intent.budget_max is not None:
             completeness += 0.25
@@ -142,12 +231,18 @@ class AmbiguityClarificationAgent:
             ambiguity_factors.append(c)
 
         # 5. Catalog coverage & retrieval feasibility
-        coverage_feasible = self.check_catalog_coverage(intent.category)
+        coverage_feasible = self.check_catalog_coverage(
+            intent.category,
+            intent.subcategory if intent.subcategory_is_explicit else None,
+        )
         if not coverage_feasible:
-            ambiguity_factors.append(f"No catalog coverage for requested category '{intent.category}'")
+            unsupported_item = intent.subcategory or intent.category
+            ambiguity_factors.append(f"No catalog coverage for requested item '{unsupported_item}'")
 
         # 6. Composite Confidence Score Calculation
         confidence = completeness
+        if missing_category_attributes:
+            confidence -= 0.15
         if ambiguous_words and intent.budget_max is None:
             confidence -= 0.15
         if detected_conflicts:
@@ -162,7 +257,11 @@ class AmbiguityClarificationAgent:
         # 7. Risk Assessment
         if detected_conflicts or validity_issues:
             risk = "high"
-        elif "category_or_use_case" in missing_critical or (ambiguous_words and intent.budget_max is None):
+        elif (
+            "category_or_use_case" in missing_critical
+            or missing_category_attributes
+            or (ambiguous_words and intent.budget_max is None)
+        ):
             risk = "medium"
         else:
             risk = "low"
@@ -172,7 +271,8 @@ class AmbiguityClarificationAgent:
             confidence < self.confidence_threshold or
             bool(detected_conflicts) or
             bool(validity_issues) or
-            "category_or_use_case" in missing_critical
+            "category_or_use_case" in missing_critical or
+            bool(missing_category_attributes)
         )
 
         question = None
@@ -185,24 +285,65 @@ class AmbiguityClarificationAgent:
             decision_reason = f"Clarification gated: high risk of conflicting constraints ({detected_conflicts[0]})."
         elif validity_issues:
             question = "It looks like the budget specified is zero or negative. What target price range would you prefer?"
-            suggested_options = ["Under $50", "Under $100", "Under $250", "Flexible budget"]
+            suggested_options = ["Under ₹5,000", "Under ₹10,000", "Under ₹25,000", "Flexible budget"]
             decision_reason = f"Clarification gated: constraint validity error ({validity_issues[0]})."
-        elif "category_or_use_case" in missing_critical:
-            question = "Could you tell me what type of product or activity you're shopping for (e.g., hiking gear, laptops, running shoes)?"
-            suggested_options = ["Hiking & Outdoor", "Laptops & Tech", "Running Shoes", "Travel Bags"]
-            decision_reason = "Clarification gated: missing critical category and intended use anchor."
         elif not coverage_feasible:
-            question = f"We currently don't have catalog stock under '{intent.category}'. Would you like to explore related categories?"
-            suggested_options = ["Footwear & Running", "Electronics & Laptops", "Travel & Backpacks"]
-            decision_reason = f"Clarification gated: catalog coverage check failed for category '{intent.category}'."
+            categories = self.available_categories()
+            category_labels = [category.replace("_", " ").title() for category in categories]
+            category_labels = [
+                label.replace("Fitness Outdoor", "Fitness & Outdoor")
+                .replace("Home Kitchen", "Home & Kitchen")
+                .replace("Bags Accessories", "Bags & Accessories")
+                for label in category_labels
+            ]
+            unsupported_item = intent.subcategory or intent.category or "that product"
+            question = (
+                f"ShopSense doesn't currently offer {unsupported_item}. "
+                f"We work with these product categories: {', '.join(category_labels)}. "
+                "What would you like to explore?"
+            )
+            suggested_options = category_labels
+            decision_reason = f"Clarification gated: no catalog coverage for requested item '{unsupported_item}'."
+        elif "category_or_use_case" in missing_critical:
+            categories = [
+                self._category_label(category)
+                for category in self.available_categories()
+            ]
+            if intent.purchase_intent == "gift":
+                question = (
+                    "What type of product would you like me to explore for the gift? "
+                    f"Available catalog categories: {', '.join(categories)}."
+                )
+                suggested_options = categories
+                decision_reason = (
+                    "Clarification gated: gift intent has no user-selected category; "
+                    "offering only categories present in the catalog."
+                )
+            else:
+                question = (
+                    "Could you tell me what type of product or activity you're shopping "
+                    f"for? Available catalog categories: {', '.join(categories)}."
+                )
+                suggested_options = categories
+                decision_reason = "Clarification gated: missing critical category and intended use anchor."
+        elif missing_category_attributes:
+            question = (
+                "What size does the recipient wear for this gift? "
+                "I can also switch to size-free gift accessories."
+            )
+            suggested_options = ["Show size-free gift accessories"]
+            decision_reason = (
+                "Clarification gated: the gift category requires recipient sizing "
+                "to avoid unsuitable recommendations."
+            )
         elif needs_clarification:
             if ambiguous_words and intent.budget_max is None:
                 question = f"You mentioned looking for something '{ambiguous_words[0]}'. What target budget range should I focus on?"
-                suggested_options = ["Under $50", "Under $100", "Under $200", "No budget limit"]
+                suggested_options = ["Under ₹5,000", "Under ₹10,000", "Under ₹20,000", "No budget limit"]
                 decision_reason = f"Clarification gated: ambiguous phrase '{ambiguous_words[0]}' without quantified boundary (confidence: {confidence:.2f})."
             else:
                 question = f"Do you have a target budget or specific features in mind for your {intent.category or 'purchase'}?"
-                suggested_options = ["Under $100", "Under $250", "Top-rated only", "Flexible"]
+                suggested_options = ["Under ₹10,000", "Under ₹25,000", "Top-rated only", "Flexible"]
                 decision_reason = f"Clarification gated: confidence ({confidence:.2f}) below threshold ({self.confidence_threshold:.2f})."
         else:
             decision_reason = (
@@ -229,4 +370,3 @@ class AmbiguityClarificationAgent:
             catalog_coverage_feasible=coverage_feasible,
             reason=decision_reason
         )
-

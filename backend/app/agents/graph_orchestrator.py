@@ -5,8 +5,11 @@ Implements validated transitions, confidence-gated clarification branches, zero-
 fallbacks, and thread-safe session checkpointing.
 """
 
+import json
 import logging
-from typing import Dict, Any, Optional, List, Tuple
+import re
+from time import perf_counter
+from typing import Dict, Any, Callable, Optional, List, Tuple
 from threading import Lock
 
 from langgraph.graph import StateGraph, START, END
@@ -36,8 +39,33 @@ from app.agents.ranking_fit import RankingFitScoringAgent
 from app.agents.explanation_generation import ExplanationGenerationAgent
 from app.agents.zero_result_fallback import ZeroResultFallbackAgent
 from app.agents.session_memory import SessionMemoryAgent
+from app.services.retrieval_constraints import evaluate_recommendation_candidate
+from app.services.catalog_service import load_and_validate_catalog
 
 logger = logging.getLogger(__name__)
+
+
+def _log_summary(value: Any, max_length: int = 1600) -> str:
+    """Render bounded, single-line structured details for workflow logs."""
+    serialized = json.dumps(value, ensure_ascii=True, separators=(",", ":"), default=str)
+    if len(serialized) > max_length:
+        return f"{serialized[:max_length]}... (truncated)"
+    return serialized
+
+
+AGENT_LOG_DETAILS = {
+    "node_query_ingestion": ("01", "Query Ingestion"),
+    "node_intent_extraction": ("02", "Intent & Constraint Extraction"),
+    "node_ambiguity_clarification": ("03", "Ambiguity & Clarification"),
+    "node_catalog_mapping": ("04", "Catalog Attribute Mapping"),
+    "node_candidate_retrieval": ("05", "Candidate Retrieval"),
+    "node_ranking_fit": ("06", "Ranking & Fit Scoring"),
+    "node_explanation_generation": ("07", "Explanation Generation"),
+    "node_zero_result_fallback": ("08", "Zero-Result & Fallback"),
+    "node_session_memory_in": ("09", "Session Memory Load"),
+    "node_session_memory_out": ("09", "Session Memory Save"),
+    "node_save_session_and_respond": ("10", "Orchestrator Response"),
+}
 
 
 class ShopSenseWorkflow:
@@ -69,6 +97,126 @@ class ShopSenseWorkflow:
             if session_id not in self._session_locks:
                 self._session_locks[session_id] = Lock()
             return self._session_locks[session_id]
+
+    def _logged_agent_node(
+        self,
+        node_name: str,
+        node: Callable[[ShopSenseGraphState], Dict[str, Any]],
+    ) -> Callable[[ShopSenseGraphState], Dict[str, Any]]:
+        agent_number, agent_name = AGENT_LOG_DETAILS[node_name]
+
+        def run(state: ShopSenseGraphState) -> Dict[str, Any]:
+            session_id = state.get("session_id", "default_session")
+            turn_id = state.get("turn_id", 1)
+            log_context = f"session={session_id} turn={turn_id}"
+            logger.info("[Agent %s/10] START %s | %s", agent_number, agent_name, log_context)
+
+            try:
+                result = node(state)
+            except Exception:
+                logger.exception("[Agent %s/10] FAILED %s | %s", agent_number, agent_name, log_context)
+                raise
+
+            details = []
+            if "workflow_status" in result:
+                details.append(f"status={result['workflow_status']}")
+            if result.get("current_intent") is not None:
+                details.append(
+                    "intent="
+                    + _log_summary(result["current_intent"].model_dump(exclude_none=True))
+                )
+            if "clarification" in result and result["clarification"] is not None:
+                decision = result["clarification"]
+                action = "clarify" if decision.needs_clarification else "search"
+                details.append(f"decision={action} confidence={decision.confidence_score:.2f}")
+                details.append(
+                    "clarification="
+                    + _log_summary(decision.model_dump(exclude_none=True))
+                )
+            if result.get("catalog_mapping") is not None:
+                details.append(
+                    "mapping="
+                    + _log_summary(result["catalog_mapping"].model_dump(exclude_none=True))
+                )
+            if "retrieved_candidates" in result:
+                details.append(f"candidates={len(result['retrieved_candidates'])}")
+                details.append(
+                    "candidate_preview="
+                    + _log_summary([
+                        {
+                            "name": product.product_name,
+                            "price": product.price,
+                            "currency": product.currency,
+                        }
+                        for product in result["retrieved_candidates"][:5]
+                    ])
+                )
+            if "sources_consulted" in result:
+                details.append(f"sources={_log_summary(result['sources_consulted'])}")
+            if "ranked_candidates" in result:
+                details.append(f"ranked={len(result['ranked_candidates'])}")
+                details.append(
+                    "ranking_preview="
+                    + _log_summary([
+                        {
+                            "name": product.product_name,
+                            "score": score.total_score,
+                            "eligible": score.is_eligible,
+                        }
+                        for product, score in result["ranked_candidates"][:3]
+                    ])
+                )
+            if "recommendations" in result:
+                details.append(f"recommendations={len(result['recommendations'])}")
+                details.append(
+                    "recommendation_preview="
+                    + _log_summary([
+                        {
+                            "name": recommendation.product.product_name,
+                            "price": recommendation.product.price,
+                            "currency": recommendation.product.currency,
+                            "score": recommendation.fit_score.total_score,
+                            "explanation": recommendation.explanation,
+                            "key_benefits": recommendation.key_benefits,
+                        }
+                        for recommendation in result["recommendations"][:3]
+                    ])
+                )
+            if "fallback" in result and result["fallback"] is not None:
+                details.append(f"fallback_needed={result['fallback'].fallback_needed}")
+                details.append(
+                    "fallback="
+                    + _log_summary(result["fallback"].model_dump(exclude_none=True))
+                )
+            if "final_response" in result and result["final_response"] is not None:
+                response = result["final_response"]
+                details.append(f"action={response.action_taken}")
+                details.append(
+                    "final_recommendations="
+                    + _log_summary([
+                        {
+                            "name": recommendation.product.product_name,
+                            "price": recommendation.product.price,
+                            "currency": recommendation.product.currency,
+                            "score": recommendation.fit_score.total_score,
+                            "explanation": recommendation.explanation,
+                            "key_benefits": recommendation.key_benefits,
+                        }
+                        for recommendation in response.recommendations[:3]
+                    ])
+                )
+
+            detail_text = f" | {' '.join(details)}" if details else ""
+            logger.info(
+                "[Agent %s/10] DONE %s | %s%s",
+                agent_number,
+                agent_name,
+                log_context,
+                detail_text,
+            )
+            return result
+
+        return run
 
     # ==========================================
     # Graph Node Definitions (10 Logical Agents)
@@ -173,10 +321,32 @@ class ShopSenseWorkflow:
         mapping = state.get("catalog_mapping")
 
         try:
-            retrieval = self.candidate_retrieval_agent.retrieve(intent, mapping)
+            ingested = state.get("normalized_query")
+            session = state.get("session_memory")
+            raw_query = ingested.sanitized_message.casefold() if ingested else ""
+            request_more = bool(re.search(
+                r"\b(?:show|give|suggest|recommend)\s+more\b|"
+                r"\b(?:more|other)\s+options\b|"
+                r"\bany\s+other\s+options?\b",
+                raw_query,
+            ))
+            excluded_product_ids = set(
+                session.rejected_product_ids if session else []
+            )
+            if request_more and session:
+                excluded_product_ids.update(session.shown_product_ids)
+            retrieval = self.candidate_retrieval_agent.retrieve(
+                intent,
+                mapping,
+                query_text=ingested.sanitized_message if ingested else None,
+                excluded_product_ids=list(excluded_product_ids),
+            )
             return {
                 "retrieved_candidates": retrieval.candidates,
                 "eligible_candidates": retrieval.candidates,
+                "retrieval_scores": retrieval.retrieval_scores,
+                "retrieval_sources": retrieval.retrieval_sources,
+                "retrieval_mode": retrieval.retrieval_mode,
                 "data_source_status": "catalog_ready",
                 "sources_consulted": retrieval.sources_consulted,
                 "store_statuses": retrieval.store_statuses,
@@ -196,8 +366,15 @@ class ShopSenseWorkflow:
         """Node 7 (Agent 6): Deterministic multi-factor scoring (0-100)."""
         candidates = state.get("eligible_candidates", [])
         intent = state.get("current_intent")
+        session = state.get("session_memory")
 
-        ranked_pairs = self.ranking_fit_agent.rank(candidates, intent)
+        ranked_pairs = self.ranking_fit_agent.rank(
+            candidates,
+            intent,
+            retrieval_scores=state.get("retrieval_scores", {}),
+            retrieval_sources=state.get("retrieval_sources", {}),
+            excluded_product_ids=session.rejected_product_ids if session else None,
+        )
         return {
             "ranked_candidates": ranked_pairs,
             "workflow_status": "ranked"
@@ -208,7 +385,29 @@ class ShopSenseWorkflow:
         ranked_pairs = state.get("ranked_candidates", [])
         intent = state.get("current_intent")
 
-        recommendations = self.explanation_agent.explain(ranked_pairs, intent, top_k=3)
+        validated_pairs = [
+            (product, score)
+            for product, score in ranked_pairs
+            if evaluate_recommendation_candidate(product, intent).is_eligible
+        ]
+        if not validated_pairs:
+            _, analysis_summary = self.explanation_agent.explain_with_analysis(
+                [],
+                intent,
+            )
+            return {
+                "recommendations": [],
+                "analysis_summary": analysis_summary,
+                "follow_up_suggestion": None,
+                "fallback": self.fallback_agent.generate_fallback(intent),
+                "workflow_status": "fallback_invoked",
+            }
+
+        recommendations, analysis_summary = self.explanation_agent.explain_with_analysis(
+            validated_pairs,
+            intent,
+            top_k=3,
+        )
 
         # Feature 5: Context-Aware Follow-Up Suggestion (At most one relevant accessory)
         follow_up = None
@@ -218,6 +417,7 @@ class ShopSenseWorkflow:
 
         return {
             "recommendations": recommendations,
+            "analysis_summary": analysis_summary,
             "follow_up_suggestion": follow_up,
             "workflow_status": "explained"
         }
@@ -242,11 +442,19 @@ class ShopSenseWorkflow:
         asked_q = clarification.clarification_question if (clarification and clarification.needs_clarification) else None
 
         if intent:
+            previous = state.get("previous_intent")
+            topic_changed = bool(
+                previous
+                and intent.category
+                and previous.category
+                and intent.category != previous.category
+            )
             updated_session = self.session_memory_agent.update_session(
                 session_id=session_id,
                 intent=intent,
                 shown_product_ids=shown_ids,
-                asked_question=asked_q
+                asked_question=asked_q,
+                topic_changed=topic_changed,
             )
             return {
                 "session_memory": updated_session,
@@ -261,6 +469,7 @@ class ShopSenseWorkflow:
         clarification = state.get("clarification")
         fallback = state.get("fallback")
         recommendations = state.get("recommendations", [])
+        analysis_summary = state.get("analysis_summary")
         intent = state.get("current_intent")
         session = state.get("session_memory")
         error_info = state.get("error_information")
@@ -272,6 +481,41 @@ class ShopSenseWorkflow:
                 turn_id=turn_id,
                 action_taken="error",
                 message=error_info or "An error occurred while processing your shopping request."
+            )
+            return {"final_response": resp, "workflow_status": "completed"}
+
+        if intent and intent.shopping_intent == "category_discovery":
+            counts: Dict[str, int] = {}
+            for product in load_and_validate_catalog():
+                counts[product.category] = counts.get(product.category, 0) + 1
+            labels = {
+                "beauty_personal_care": "Beauty & Personal Care",
+                "fashion_accessories": "Fashion Accessories",
+                "fitness_outdoor": "Fitness & Outdoor",
+                "home_kitchen": "Home & Kitchen",
+                "bags_accessories": "Bags & Accessories",
+            }
+            categories = [
+                {
+                    "name": labels.get(name, name.replace("_", " ").title()),
+                    "product_count": count,
+                }
+                for name, count in sorted(counts.items())
+            ]
+            message = "Our catalog currently includes: " + "; ".join(
+                f"{item['name']} ({item['product_count']} products)"
+                for item in categories
+            ) + "."
+            resp = OrchestratorResponse(
+                session_id=session_id,
+                turn_id=turn_id,
+                action_taken="recommend",
+                message=message,
+                session_summary={
+                    "session_id": session_id,
+                    "turn_count": session.turn_count if session else turn_id,
+                    "available_categories": categories,
+                },
             )
             return {"final_response": resp, "workflow_status": "completed"}
 
@@ -297,6 +541,7 @@ class ShopSenseWorkflow:
                 turn_id=turn_id,
                 action_taken="fallback",
                 message=fallback.explanation,
+                analysis_summary=analysis_summary,
                 fallback=fallback,
                 session_summary={
                     "session_id": session_id,
@@ -320,15 +565,15 @@ class ShopSenseWorkflow:
                 "use_case_score": rec.fit_score.use_case_score,
                 "feature_score": rec.fit_score.feature_score,
                 "budget_score": rec.fit_score.budget_score,
+                "retrieval_score": rec.fit_score.retrieval_score,
                 "key_benefit": rec.key_benefits[0] if rec.key_benefits else "Solid overall match"
             })
 
-        curr_symbol = "₹" if (intent and intent.budget_currency == "INR") else "$"
         intro = f"I've analyzed our catalog and found {len(recommendations)} great options for you"
         if intent and intent.recipient:
             intro += f" (ideal for your {intent.recipient})"
         if intent and intent.budget_max:
-            intro += f" staying within your {curr_symbol}{intent.budget_max:,.0f} limit"
+            intro += f" staying within your ₹{intent.budget_max:,.0f} limit"
         intro += "."
 
         resp = OrchestratorResponse(
@@ -336,6 +581,7 @@ class ShopSenseWorkflow:
             turn_id=turn_id,
             action_taken="recommend",
             message=intro,
+            analysis_summary=analysis_summary,
             recommendations=recommendations,
             follow_up_suggestion=state.get("follow_up_suggestion"),
             top_three_comparison=comparison_breakdown,
@@ -366,6 +612,9 @@ class ShopSenseWorkflow:
         Do NOT trigger candidate retrieval until user clarifies on the next turn.
         """
         clarification = state.get("clarification")
+        intent = state.get("current_intent")
+        if intent and intent.shopping_intent == "category_discovery":
+            return "node_session_memory_out"
         if clarification and clarification.needs_clarification:
             return "node_session_memory_out"
         return "node_catalog_mapping"
@@ -387,17 +636,21 @@ class ShopSenseWorkflow:
         builder = StateGraph(ShopSenseGraphState)
 
         # Register nodes
-        builder.add_node("node_query_ingestion", self.node_query_ingestion)
-        builder.add_node("node_session_memory_in", self.node_session_memory_in)
-        builder.add_node("node_intent_extraction", self.node_intent_extraction)
-        builder.add_node("node_ambiguity_clarification", self.node_ambiguity_clarification)
-        builder.add_node("node_catalog_mapping", self.node_catalog_mapping)
-        builder.add_node("node_candidate_retrieval", self.node_candidate_retrieval)
-        builder.add_node("node_zero_result_fallback", self.node_zero_result_fallback)
-        builder.add_node("node_ranking_fit", self.node_ranking_fit)
-        builder.add_node("node_explanation_generation", self.node_explanation_generation)
-        builder.add_node("node_session_memory_out", self.node_session_memory_out)
-        builder.add_node("node_save_session_and_respond", self.node_save_session_and_respond)
+        agent_nodes = [
+            ("node_query_ingestion", self.node_query_ingestion),
+            ("node_session_memory_in", self.node_session_memory_in),
+            ("node_intent_extraction", self.node_intent_extraction),
+            ("node_ambiguity_clarification", self.node_ambiguity_clarification),
+            ("node_catalog_mapping", self.node_catalog_mapping),
+            ("node_candidate_retrieval", self.node_candidate_retrieval),
+            ("node_zero_result_fallback", self.node_zero_result_fallback),
+            ("node_ranking_fit", self.node_ranking_fit),
+            ("node_explanation_generation", self.node_explanation_generation),
+            ("node_session_memory_out", self.node_session_memory_out),
+            ("node_save_session_and_respond", self.node_save_session_and_respond),
+        ]
+        for node_name, node in agent_nodes:
+            builder.add_node(node_name, self._logged_agent_node(node_name, node))
 
         # Wire transitions
         builder.add_edge(START, "node_query_ingestion")
@@ -457,6 +710,13 @@ class ShopSenseWorkflow:
         """
         lock = self._get_session_lock(session_id)
         with lock:
+            started_at = perf_counter()
+            logger.info(
+                "[Workflow] START session=%s turn=%s source=%s",
+                session_id,
+                turn_id,
+                input_source,
+            )
             initial_state: ShopSenseGraphState = {
                 "session_id": session_id,
                 "turn_id": turn_id,
@@ -471,6 +731,9 @@ class ShopSenseWorkflow:
                 "retrieved_candidates": [],
                 "eligible_candidates": [],
                 "ranked_candidates": [],
+                "retrieval_scores": {},
+                "retrieval_sources": {},
+                "retrieval_mode": "hybrid",
                 "catalog_mapping": None,
                 "follow_up_suggestion": None,
                 "error_information": None,
@@ -478,5 +741,19 @@ class ShopSenseWorkflow:
             }
 
             config = {"configurable": {"thread_id": session_id}}
-            result = self.graph.invoke(initial_state, config=config)
-            return result.get("final_response")
+            try:
+                result = self.graph.invoke(initial_state, config=config)
+            except Exception:
+                logger.exception("[Workflow] FAILED session=%s turn=%s", session_id, turn_id)
+                raise
+
+            response = result.get("final_response")
+            logger.info(
+                "[Workflow] DONE session=%s turn=%s action=%s recommendations=%s elapsed_ms=%.1f",
+                session_id,
+                turn_id,
+                response.action_taken if response else "missing",
+                len(response.recommendations) if response else 0,
+                (perf_counter() - started_at) * 1000,
+            )
+            return response

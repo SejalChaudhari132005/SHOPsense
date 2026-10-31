@@ -35,7 +35,7 @@ class ShippingInfo(BaseModel):
     free_shipping: bool = False
     estimated_days: Optional[int] = Field(default=None, ge=0)
     shipping_cost: Optional[float] = Field(default=None, ge=0.0)
-    currency: Optional[str] = "USD"
+    currency: Optional[str] = "INR"
     carrier: Optional[str] = None
 
 
@@ -60,12 +60,13 @@ class Product(BaseModel):
     description: str = Field(..., description="Product summary and highlights")
 
     # Financial & Currency Handling
-    price: float = Field(..., gt=0.0, description="Product listing price in native currency")
-    currency: str = Field(default="USD", description="ISO 4217 currency code (USD, INR, EUR, GBP)")
+    price: float = Field(..., gt=0.0, description="Product listing price; mock catalog prices are in INR")
+    currency: str = Field(default="INR", description="Catalog currency code (INR)")
     normalized_price_usd: Optional[float] = Field(
         default=None, 
         gt=0.0, 
-        description="Calculated benchmark price in USD for standardized comparison"
+        exclude=True,
+        description="Internal-only USD benchmark used for ranking; never serialized to clients"
     )
 
     # Online Links & Store Attribution
@@ -77,7 +78,10 @@ class Product(BaseModel):
     # Structured Facets
     attributes: Dict[str, Any] = Field(default_factory=dict, description="Generic key-value attribute facets")
     use_cases: List[str] = Field(default_factory=list, description="Target use cases, activities, or personas")
+    good_for: List[str] = Field(default_factory=list, description="Evidence-backed suitable uses or personas")
+    review_snippets: List[str] = Field(default_factory=list, description="Short catalog review evidence")
     tags: List[str] = Field(default_factory=list, description="Search and synonym tags")
+    requires_size: bool = Field(default=False, description="Whether selecting a size is required")
     sizes: Optional[List[str]] = Field(default=None, description="Available sizes if applicable")
     colours: Optional[List[str]] = Field(default=None, description="Available color options if applicable")
     specifications: Dict[str, Any] = Field(default_factory=dict, description="Technical specifications")

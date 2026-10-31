@@ -9,7 +9,8 @@ from app.models.state import ExtractedIntent, AttributeMappingResult
 from app.services.catalog_service import (
     canonicalize_category,
     normalize_attribute_values,
-    FEATURE_SYNONYMS
+    FEATURE_SYNONYMS,
+    match_synonyms,
 )
 
 
@@ -69,6 +70,7 @@ class CatalogAttributeMappingAgent:
         mapped_use_cases: List[str] = []
         applied_synonyms: Dict[str, str] = {}
         explanations: List[str] = []
+        expansions: List[str] = []
 
         # 1. Canonicalize Category
         norm_cat = None
@@ -82,11 +84,13 @@ class CatalogAttributeMappingAgent:
         if intent.intended_use:
             clean_use = intent.intended_use.lower()
             mapped_use_cases.append(clean_use)
+            expansions.extend(match_synonyms(clean_use))
             explanations.append(f"Retained intended use: {clean_use}.")
 
         # 3. Map Soft Preferences & Features
         for pref in intent.soft_preferences:
             clean_pref = pref.lower().strip()
+            expansions.extend(match_synonyms(clean_pref))
             if clean_pref in self.COLLOQUIAL_MAP:
                 mapping = self.COLLOQUIAL_MAP[clean_pref]
                 if mapping["type"] == "attribute_match":
@@ -124,6 +128,7 @@ class CatalogAttributeMappingAgent:
             normalized_category=norm_cat,
             mapped_attributes=mapped_attrs,
             mapped_use_cases=list(dict.fromkeys(mapped_use_cases)),
+            expansions=list(dict.fromkeys(expansions)),
             applied_synonyms=applied_synonyms,
             explanations=explanations
         )

@@ -31,7 +31,7 @@ class StoreStatus(BaseModel):
     status: StoreStatusEnum = Field(..., description="Current operational status")
     is_configured: bool = Field(..., description="True if required API keys / affiliate IDs are set")
     is_mocked: bool = Field(..., description="True if returning synthetic demonstration data")
-    supported_currencies: List[str] = Field(default_factory=lambda: ["USD"])
+    supported_currencies: List[str] = Field(default_factory=lambda: ["INR"])
     rate_limit_per_second: Optional[float] = None
     notes: str = Field(default="", description="Truthful explanation of integration state")
     last_checked_at: datetime = Field(default_factory=datetime.utcnow)
@@ -55,19 +55,19 @@ class StoreSearchResult(BaseModel):
 class BaseStoreAdapter(ABC):
     """
     Abstract Base Class for product-source adapters.
-    All retail sources (Amazon, Flipkart, Local Catalog, etc.) must implement this interface.
+    Product sources implement this interface to serve normalized catalog records.
     """
 
     @property
     @abstractmethod
     def store_id(self) -> str:
-        """Unique machine-readable store ID (e.g. 'amazon_in', 'flipkart', 'local_catalog')."""
+        """Unique machine-readable source ID (for example, 'local_catalog')."""
         pass
 
     @property
     @abstractmethod
     def store_name(self) -> str:
-        """Human-readable store display name (e.g. 'Amazon India', 'Flipkart')."""
+        """Human-readable source name."""
         pass
 
     @property
@@ -93,7 +93,7 @@ class BaseStoreAdapter(ABC):
         query: str,
         category: Optional[str] = None,
         budget_max: Optional[float] = None,
-        currency: Optional[str] = "USD",
+        currency: Optional[str] = "INR",
         limit: int = 10,
         **kwargs
     ) -> StoreSearchResult:

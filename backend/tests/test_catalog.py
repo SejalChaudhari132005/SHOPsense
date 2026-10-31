@@ -11,6 +11,8 @@ Covers:
 - Provenance and source metadata auditing
 """
 
+import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -26,6 +28,7 @@ from app.services.currency_service import (
     convert_currency,
     normalize_price_to_usd,
     format_price,
+    format_price_in_inr,
     compare_prices,
 )
 from app.services.catalog_service import (
@@ -121,6 +124,45 @@ def test_schema_missing_optional_fields():
     assert "specifications" in minimal_prod.provenance.missing_fields
 
 
+def test_product_defaults_to_inr():
+    product = Product(
+        product_id="test_inr_default",
+        product_name="Default Currency Product",
+        brand="ShopSense",
+        category="electronics",
+        description="Product uses the catalog currency default.",
+        price=1200.0,
+    )
+
+    assert product.currency == "INR"
+
+
+def test_catalog_loader_converts_imported_prices_to_inr(tmp_path):
+    catalog_path = tmp_path / "foreign-price.json"
+    catalog_path.write_text(
+        json.dumps(
+            [
+                {
+                    "product_id": "foreign_price",
+                    "product_name": "Imported Product",
+                    "brand": "ShopSense",
+                    "category": "electronics",
+                    "description": "Imported source price is normalized for catalog use.",
+                    "price": 10.0,
+                    "currency": "USD",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    [product] = load_and_validate_catalog(str(catalog_path))
+
+    assert product.price == 833.33
+    assert product.currency == "INR"
+    assert product.normalized_price_usd is None
+
+
 def test_schema_empty_string_rejection():
     """Verify that empty strings for required text fields are rejected."""
     with pytest.raises(ValidationError):
@@ -182,6 +224,7 @@ def test_currency_formatting():
     assert format_price(119.99, "USD") == "$119.99"
     assert format_price(4999.00, "INR") == "₹4,999.00"
     assert format_price(85.50, "EUR") == "€85.50"
+    assert format_price_in_inr(119.99, "USD") == "₹9,999.17"
 
 
 # ==========================================
@@ -191,12 +234,12 @@ def test_currency_formatting():
 def test_catalog_loader_and_counts():
     """
     Verify loading demo_products.json:
-    - Must load at least 30 items (our demo catalog has 35).
-    - Must represent all 7 required categories.
+    - Must load the curated products and DummyJSON snapshot.
+    - Must represent all supported catalog categories.
     - All items must pass Pydantic validation.
     """
     products = load_and_validate_catalog()
-    assert len(products) >= 30, f"Expected at least 30 products, got {len(products)}"
+    assert len(products) >= 234, f"Expected at least 234 products, got {len(products)}"
 
     categories = {p.category for p in products}
     expected_categories = {
@@ -206,9 +249,35 @@ def test_catalog_loader_and_counts():
         "travel_accessories",
         "fitness_outdoor",
         "home_kitchen",
-        "bags_accessories"
+        "bags_accessories",
+        "beauty_personal_care",
+        "fashion_accessories",
+        "groceries",
+        "automotive",
     }
     assert expected_categories.issubset(categories), f"Missing categories: {expected_categories - categories}"
+    assert {product.currency for product in products} == {"INR"}
+    dummyjson_products = [product for product in products if product.source_store == "DummyJSON"]
+    assert len(dummyjson_products) == 194
+    assert all(
+        product.product_id.startswith("dummyjson_")
+        and product.image_url
+        and product.image_url.startswith("https://cdn.dummyjson.com/")
+        and product.normalized_price_usd is not None
+        for product in dummyjson_products
+    )
+    laptop_matches = search_by_category_and_keywords(
+        products, category="electronics", keywords=["laptop"]
+    )
+    assert any(
+        product.source_store == "DummyJSON" and product.image_url
+        for product in laptop_matches
+    )
+    assert all(
+        product.shipping_information is None
+        or product.shipping_information.currency == "INR"
+        for product in products
+    )
 
     # Verify all items have positive normalized_price_usd
     for p in products:
@@ -240,7 +309,11 @@ def test_canonicalize_category():
     """Verify casual query terms resolve to canonical category keys."""
     assert canonicalize_category("shoes") == "footwear"
     assert canonicalize_category("sneakers") == "footwear"
+    assert canonicalize_category("mens-shoes") == "footwear"
     assert canonicalize_category("laptop") == "electronics"
+    assert canonicalize_category("womens-dresses") == "clothing"
+    assert canonicalize_category("skin-care") == "beauty_personal_care"
+    assert canonicalize_category("womens-jewellery") == "fashion_accessories"
     assert canonicalize_category("luggage") == "travel_accessories"
     assert canonicalize_category("gym") == "fitness_outdoor"
     assert canonicalize_category("cookware") == "home_kitchen"
@@ -317,7 +390,7 @@ def test_filter_strict_price_ceiling():
     # AeroBook Air 13 ($549.99) should pass, ZenBook ($899.99) and DevBook ($1499) must NOT
     assert len(budget_laptops) == 1
     assert budget_laptops[0].product_id == "prod_elec_003"
-    assert budget_laptops[0].price <= 600.0
+    assert budget_laptops[0].normalized_price_usd <= 600.0
 
 
 def test_filter_by_size_and_colour():
@@ -435,6 +508,7 @@ async def test_api_list_categories(async_client):
     assert "categories" in data
     assert "footwear" in data["categories"]
     assert "electronics" in data["categories"]
+    assert "beauty_personal_care" in data["categories"]
 
 
 @pytest.mark.asyncio
@@ -448,7 +522,9 @@ async def test_api_search_products(async_client):
     assert data["total_count"] >= 1
     # Check that all returned items respect the ceiling
     for item in data["items"]:
-        assert item["normalized_price_usd"] <= 125.0
+        assert item["currency"] == "INR"
+        assert "normalized_price_usd" not in item
+        assert item["price"] <= 125.0 / 0.012
 
 
 @pytest.mark.asyncio

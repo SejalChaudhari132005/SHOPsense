@@ -1,0 +1,72 @@
+[
+  {
+    "id": "exact_cricket_helmet",
+    "group": "exact_match",
+    "query": "Cricket Helmet under $100",
+    "intent": {
+      "category": "fitness_outdoor",
+      "subcategory": "sports-accessories",
+      "product_query": "Cricket Helmet",
+      "category_is_explicit": true,
+      "subcategory_is_explicit": true,
+      "budget_max": 100,
+      "budget_currency": "USD"
+    },
+    "relevant_product_ids": ["dummyjson_144"]
+  },
+  {
+    "id": "semantic_knee_support",
+    "group": "semantic",
+    "query": "I need support for painful joints while going down steep slopes.",
+    "intent": {
+      "intended_use": "downhill hiking",
+      "category_is_explicit": false,
+      "subcategory_is_explicit": false
+    },
+    "relevant_product_ids": ["prod_fit_004"]
+  },
+  {
+    "id": "semantic_hiking_knees",
+    "group": "semantic",
+    "query": "Something helpful for my dad on long mountain walks when his knees hurt.",
+    "intent": {
+      "intended_use": "mountain hiking",
+      "recipient": "dad",
+      "category_is_explicit": false,
+      "subcategory_is_explicit": false
+    },
+    "relevant_product_ids": ["prod_fit_004"]
+  },
+  {
+    "id": "multi_constraint_waterproof_shoes",
+    "group": "multi_constraint",
+    "query": "Lightweight waterproof trail running shoes under $150",
+    "intent": {
+      "category": "footwear",
+      "subcategory": "trail_running",
+      "category_is_explicit": true,
+      "subcategory_is_explicit": true,
+      "budget_max": 150,
+      "budget_currency": "USD",
+      "hard_constraints": {"waterproof": true},
+      "soft_preferences": ["lightweight"]
+    },
+    "relevant_product_ids": ["prod_foot_001"]
+  },
+  {
+    "id": "multi_constraint_programming_laptop",
+    "group": "multi_constraint",
+    "query": "A lightweight laptop for programming under $1100",
+    "intent": {
+      "category": "electronics",
+      "subcategory": "laptops",
+      "category_is_explicit": true,
+      "subcategory_is_explicit": true,
+      "intended_use": "programming",
+      "budget_max": 1100,
+      "budget_currency": "USD",
+      "hard_constraints": {"ram_gb": 16}
+    },
+    "relevant_product_ids": ["prod_elec_001"]
+  }
+]

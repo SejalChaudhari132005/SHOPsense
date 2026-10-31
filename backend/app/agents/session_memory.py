@@ -34,10 +34,22 @@ class SessionMemoryAgent:
         session_id: str,
         intent: ExtractedIntent,
         shown_product_ids: Optional[List[str]] = None,
-        asked_question: Optional[str] = None
+        asked_question: Optional[str] = None,
+        topic_changed: bool = False,
     ) -> SessionContext:
         session = self.get_or_create_session(session_id)
         session.turn_count += 1
+        previous_intent = session.current_intent
+        if not topic_changed and previous_intent:
+            if not intent.intended_use:
+                intent.intended_use = previous_intent.intended_use
+            if not intent.soft_preferences:
+                intent.soft_preferences = list(previous_intent.soft_preferences)
+            if not intent.health_considerations:
+                intent.health_considerations = list(previous_intent.health_considerations)
+        if topic_changed:
+            session.soft_preferences = []
+            session.health_considerations = []
         session.current_intent = intent
         session.last_updated_at = datetime.utcnow()
 
@@ -46,9 +58,14 @@ class SessionMemoryAgent:
             session.confirmed_constraints["budget_max"] = intent.budget_max
             session.confirmed_constraints["budget_currency"] = intent.budget_currency
             session.confirmed_constraints["is_budget_strict"] = intent.is_budget_strict
+        else:
+            for key in ("budget_max", "budget_min", "budget_currency", "is_budget_strict"):
+                session.confirmed_constraints.pop(key, None)
 
         if intent.category:
             session.confirmed_constraints["category"] = intent.category
+        else:
+            session.confirmed_constraints.pop("category", None)
 
         if intent.intended_use:
             session.confirmed_constraints["intended_use"] = intent.intended_use
@@ -61,6 +78,9 @@ class SessionMemoryAgent:
 
         # Record soft preferences
         session.soft_preferences = list(dict.fromkeys(session.soft_preferences + intent.soft_preferences))
+        session.health_considerations = list(dict.fromkeys(
+            session.health_considerations + intent.health_considerations
+        ))
 
         # Record questions asked to prevent repetitive badgering
         if asked_question and asked_question not in session.questions_asked:

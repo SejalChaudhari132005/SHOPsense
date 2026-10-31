@@ -19,7 +19,7 @@ class SearchRequest(BaseModel):
     category: Optional[str] = Field(default=None, description="Category filter or synonym (e.g. shoes, laptop)")
     min_price: Optional[float] = Field(default=None, ge=0.0, description="Minimum price boundary")
     max_price: Optional[float] = Field(default=None, ge=0.0, description="Maximum price boundary")
-    currency: str = Field(default="USD", description="Currency code for price bounds")
+    currency: str = Field(default="INR", description="Currency code for price bounds")
     size: Optional[str] = Field(default=None, description="Size filter")
     colour: Optional[str] = Field(default=None, description="Color filter")
     sort_by: str = Field(default="relevance", description="Sorting field: price, rating, review_count, name")
@@ -57,7 +57,9 @@ class ProductComparisonItem(BaseModel):
     category: str
     price: float
     currency: str
-    normalized_price_usd: float
+    normalized_price_usd: float = Field(
+        ..., exclude=True, description="Internal-only comparison benchmark"
+    )
     rating: Optional[float] = None
     review_count: Optional[int] = None
     highlights: List[str] = Field(default_factory=list)
@@ -68,7 +70,7 @@ class ProductComparisonItem(BaseModel):
     fit_score_breakdown: Optional[Dict[str, float]] = None
     unknown_attributes: List[str] = Field(default_factory=list)
     data_source: str = Field(default="Catalog")
-    freshness: str = Field(default="Live / Verified Catalog")
+    freshness: str = Field(default="Demo sample data")
     trade_offs: List[str] = Field(default_factory=list)
 
 
@@ -121,7 +123,7 @@ class RefineRequest(BaseModel):
     session_id: str = Field(..., description="Active session ID to mutate")
     message: Optional[str] = Field(default=None, description="Optional natural language refinement prompt")
     new_budget_max: Optional[float] = Field(default=None, ge=0.0)
-    new_budget_currency: Optional[str] = "USD"
+    new_budget_currency: Optional[str] = "INR"
     new_colour: Optional[str] = None
     new_size: Optional[str] = None
     new_brand: Optional[str] = None

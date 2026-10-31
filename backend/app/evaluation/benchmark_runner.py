@@ -17,8 +17,12 @@ from typing import Dict, List, Any, Optional
 from pydantic import BaseModel
 
 from app.agents.graph_orchestrator import ShopSenseWorkflow
+from app.core.config import settings
 from app.services.comparison_service import compare_products_side_by_side, analyze_why_not
+from app.services.catalog_service import load_and_validate_catalog
+from app.services.hybrid_retrieval import get_hybrid_catalog_index
 from app.services.preference_db import preference_db
+from app.services.currency_service import convert_currency
 from app.models.state import SessionContext, ExtractedIntent
 
 
@@ -34,6 +38,8 @@ class BenchmarkResult(BaseModel):
     fallback_success_rate: float
     session_memory_accuracy: float
     product_data_completeness: float
+    retrieval_warmup_ms: float
+    semantic_retrieval_available: bool
     latency_min_ms: float
     latency_mean_ms: float
     latency_p95_ms: float
@@ -48,6 +54,16 @@ def run_comprehensive_evaluation() -> BenchmarkResult:
     workflow = ShopSenseWorkflow()
     latencies: List[float] = []
     details: List[Dict[str, Any]] = []
+
+    catalog = load_and_validate_catalog(settings.CATALOG_PATH)
+    hybrid_index = get_hybrid_catalog_index(catalog)
+    warmup_started = time.perf_counter()
+    warmup_result = hybrid_index.search(
+        "semantic retrieval warmup",
+        allowed_product_ids=hybrid_index.product_ids,
+        limit=1,
+    )
+    retrieval_warmup_ms = (time.perf_counter() - warmup_started) * 1000.0
 
     # 1. Clear queries with budget & specs (Expect Action: "recommend", Hard Constraints 100% Satisfied)
     clear_test_cases = [
@@ -77,7 +93,7 @@ def run_comprehensive_evaluation() -> BenchmarkResult:
             "query": "wireless noise cancelling headphones under $350",
             "category": "electronics",
             "budget_max": 350.0,
-            "expected_top": "prod_elec_003",
+            "expected_top": "prod_elec_004",
         },
         {
             "id": "Q05_hiking_boots",
@@ -108,8 +124,11 @@ def run_comprehensive_evaluation() -> BenchmarkResult:
         if has_recs:
             for rec in res.recommendations:
                 hard_constraint_checks += 1
-                price = rec.product.normalized_price_usd or rec.product.price
-                budget_ok = price <= tc["budget_max"]
+                price_inr = convert_currency(
+                    rec.product.price, rec.product.currency, "INR"
+                )
+                budget_inr = convert_currency(tc["budget_max"], "USD", "INR")
+                budget_ok = price_inr <= budget_inr
                 eligible_ok = rec.fit_score.is_eligible is True
                 if budget_ok and eligible_ok:
                     hard_constraint_passes += 1
@@ -244,7 +263,11 @@ def run_comprehensive_evaluation() -> BenchmarkResult:
     latencies.append((time.perf_counter() - t0) * 1000.0)
 
     memory_checks += 1
-    if res_m2.action_taken == "recommend" and all(r.product.normalized_price_usd <= 120.0 for r in res_m2.recommendations):
+    if res_m2.action_taken == "recommend" and all(
+        convert_currency(r.product.price, r.product.currency, "INR")
+        <= convert_currency(120.0, "USD", "INR")
+        for r in res_m2.recommendations
+    ):
         memory_successes += 1
 
     # Turn B1 -> B2: Brand exclusion
@@ -315,6 +338,8 @@ def run_comprehensive_evaluation() -> BenchmarkResult:
         fallback_success_rate=round(fallback_rate * 100.0, 1),
         session_memory_accuracy=round(memory_rate * 100.0, 1),
         product_data_completeness=round(completeness_rate * 100.0, 1),
+        retrieval_warmup_ms=round(retrieval_warmup_ms, 1),
+        semantic_retrieval_available=warmup_result.semantic_available,
         latency_min_ms=round(lat_min, 1),
         latency_mean_ms=round(lat_mean, 1),
         latency_p95_ms=round(lat_p95, 1),
@@ -336,5 +361,6 @@ if __name__ == "__main__":
     print(f"Fallback Success Rate: {result.fallback_success_rate}%")
     print(f"Session-Memory Accuracy: {result.session_memory_accuracy}%")
     print(f"Product-Data Completeness: {result.product_data_completeness}%")
-    print(f"End-to-End Latency: Min={result.latency_min_ms}ms, Mean={result.latency_mean_ms}ms, P95={result.latency_p95_ms}ms, Max={result.latency_max_ms}ms")
+    print(f"Hybrid Retrieval Warmup: {result.retrieval_warmup_ms}ms (semantic available: {result.semantic_retrieval_available})")
+    print(f"Steady-State End-to-End Latency: Min={result.latency_min_ms}ms, Mean={result.latency_mean_ms}ms, P95={result.latency_p95_ms}ms, Max={result.latency_max_ms}ms")
     print("=" * 60)

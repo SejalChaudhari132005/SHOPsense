@@ -94,7 +94,12 @@ async def test_endpoint_search_with_filters(async_client: AsyncClient):
     assert "items" in data
     assert "total_count" in data
     assert data["total_count"] >= 1
-    assert all(item["normalized_price_usd"] <= 130.0 for item in data["items"])
+    assert all(
+        item["currency"] == "INR"
+        and "normalized_price_usd" not in item
+        and item["price"] <= 130.0 / 0.012
+        for item in data["items"]
+    )
 
 
 @pytest.mark.asyncio
@@ -202,9 +207,11 @@ async def test_endpoint_refine_constraints(async_client: AsyncClient):
     assert res.status_code == 200
     data = res.json()
     assert data["action_taken"] == "recommend"
-    # All recommendations must strictly respect the new $900 ceiling
+    # Foreign-currency budgets are converted to INR and are not exposed as USD.
     for rec in data["recommendations"]:
-        assert rec["product"]["price"] <= 900.0
+        assert "normalized_price_usd" not in rec["product"]
+        assert rec["product"]["price"] <= 900.0 / 0.012
+        assert rec["product"]["currency"] == "INR"
 
 
 # ==========================================

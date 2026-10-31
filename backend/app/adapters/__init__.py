@@ -9,8 +9,6 @@ from app.adapters.base import (
     StoreSearchResult,
 )
 from app.adapters.local_catalog_adapter import LocalCatalogAdapter
-from app.adapters.amazon_adapter import AmazonIndiaAdapter
-from app.adapters.flipkart_adapter import FlipkartAdapter
 from app.adapters.registry import (
     StoreAdapterRegistry,
     UnifiedRetrievalResult,
@@ -23,8 +21,6 @@ __all__ = [
     "StoreStatusEnum",
     "StoreSearchResult",
     "LocalCatalogAdapter",
-    "AmazonIndiaAdapter",
-    "FlipkartAdapter",
     "StoreAdapterRegistry",
     "UnifiedRetrievalResult",
     "adapter_registry",

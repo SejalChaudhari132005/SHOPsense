@@ -13,7 +13,11 @@ from app.models.api_schemas import (
     WhyNotResponse
 )
 from app.services.catalog_service import load_and_validate_catalog
-from app.services.currency_service import format_price, normalize_price_to_usd
+from app.services.currency_service import (
+    convert_currency,
+    format_price_in_inr,
+)
+from app.services.catalog_service import canonicalize_category
 from app.agents.ranking_fit import RankingFitScoringAgent
 
 ranking_agent = RankingFitScoringAgent()
@@ -73,12 +77,18 @@ def compare_products_side_by_side(
 
             # Evaluate hard constraints
             if intent.budget_max is not None:
-                p_usd = p.normalized_price_usd or p.price
-                max_usd = normalize_price_to_usd(intent.budget_max, intent.budget_currency)
-                hard_satisfaction["Within Budget"] = (p_usd <= max_usd) if intent.is_budget_strict else True
+                max_inr = convert_currency(
+                    intent.budget_max, intent.budget_currency, "INR"
+                )
+                hard_satisfaction["Within Budget"] = (
+                    p.price <= max_inr if intent.is_budget_strict else True
+                )
 
-            if intent.category:
-                hard_satisfaction["Category Match"] = (p.category == intent.category)
+            if intent.category and intent.category_is_explicit:
+                hard_satisfaction["Category Match"] = (
+                    canonicalize_category(p.category)
+                    == canonicalize_category(intent.category)
+                )
 
             for hk, hv in intent.hard_constraints.items():
                 val = p.attributes.get(hk) or p.specifications.get(hk)
@@ -91,18 +101,26 @@ def compare_products_side_by_side(
                     soft_matches.append(pref)
 
             # Trade-offs
-            p_usd = p.normalized_price_usd or p.price
             if intent.budget_max:
-                max_usd = normalize_price_to_usd(intent.budget_max, intent.budget_currency)
-                if p_usd > max_usd * 0.9:
-                    trade_offs.append(f"Near budget upper limit (${p_usd:.2f} USD)")
+                max_inr = convert_currency(
+                    intent.budget_max, intent.budget_currency, "INR"
+                )
+                if p.price > max_inr * 0.9:
+                    trade_offs.append(
+                        f"Near budget upper limit ({format_price_in_inr(p.price, p.currency)})"
+                    )
             for pref in intent.soft_preferences:
                 if pref not in soft_matches:
                     trade_offs.append(f"Lacks soft preference '{pref}'")
 
         # Determine data source & freshness
-        store_id = p.source_store or p.attributes.get("store") or ("Amazon India" if "amzn" in p.product_id else "Flipkart" if "fk" in p.product_id else "Verified Catalog")
-        freshness = "Live Extracted" if (p.product_url and "http" in p.product_url) else "Catalog Verified"
+        store_id = p.source_store or "Local Catalog"
+        if p.provenance.is_sample_data:
+            freshness = "Demo sample data"
+        elif p.product_url and "http" in p.product_url:
+            freshness = "Live Extracted"
+        else:
+            freshness = "Catalog Verified" if p.provenance.verified else "Unverified"
 
         item = ProductComparisonItem(
             product_id=p.product_id,
@@ -111,7 +129,7 @@ def compare_products_side_by_side(
             category=p.category,
             price=p.price,
             currency=p.currency,
-            normalized_price_usd=p.normalized_price_usd or p.price,
+            normalized_price_usd=p.price,
             rating=p.rating,
             review_count=p.review_count,
             highlights=highlights,
@@ -135,28 +153,29 @@ def compare_products_side_by_side(
             matrix[spec][p.product_id] = val if val is not None else "Unknown"
 
     # Price comparison analysis
-    sorted_by_price = sorted(products, key=lambda x: x.normalized_price_usd or x.price)
+    sorted_by_price = sorted(products, key=lambda x: x.price)
     cheapest = sorted_by_price[0]
     priciest = sorted_by_price[-1]
-    price_delta = round((priciest.normalized_price_usd or priciest.price) - (cheapest.normalized_price_usd or cheapest.price), 2)
+    price_delta = round(priciest.price - cheapest.price, 2)
 
     price_comp = {
         "most_affordable": {
             "product_id": cheapest.product_id,
             "product_name": cheapest.product_name,
-            "price_formatted": format_price(cheapest.price, cheapest.currency)
+            "price_formatted": format_price_in_inr(cheapest.price, cheapest.currency)
         },
         "premium_choice": {
             "product_id": priciest.product_id,
             "product_name": priciest.product_name,
-            "price_formatted": format_price(priciest.price, priciest.currency)
+            "price_formatted": format_price_in_inr(priciest.price, priciest.currency)
         },
-        "price_difference_usd": price_delta
+        "price_difference_inr": price_delta
     }
 
     summary = (
         f"Compared {len(products)} products. {cheapest.product_name} is the most budget-friendly "
-        f"at {format_price(cheapest.price, cheapest.currency)}, saving ${price_delta:.2f} USD "
+        f"at {format_price_in_inr(cheapest.price, cheapest.currency)}, saving "
+        f"{format_price_in_inr(price_delta, 'INR')} "
         f"compared to {priciest.product_name}."
     )
 
@@ -188,31 +207,43 @@ def analyze_why_not(
     unmatched_soft: List[str] = []
     unknown_attrs: List[str] = []
     what_needs_to_change: List[str] = []
-    p_price_usd = product.normalized_price_usd or product.price
+    p_price_inr = product.price
 
     # Check retrieval status: was it retrieved into candidate pool for this session?
     # An item is considered retrieved if it was shown, rejected during evaluation, or matches session category
     was_retrieved = (
         product_id in session.shown_product_ids or 
         product_id in session.rejected_product_ids or 
-        (intent.category is not None and product.category == intent.category)
+        (
+            intent.category is not None
+            and canonicalize_category(product.category)
+            == canonicalize_category(intent.category)
+        )
     )
 
     # Check budget ceiling
     if intent.budget_max is not None:
-        max_usd = normalize_price_to_usd(intent.budget_max, intent.budget_currency)
-        if p_price_usd > max_usd:
-            diff = round(p_price_usd - max_usd, 2)
+        max_inr = convert_currency(intent.budget_max, intent.budget_currency, "INR")
+        if intent.is_budget_strict and p_price_inr > max_inr:
+            diff = round(p_price_inr - max_inr, 2)
             violated_hard.append(
-                f"Price ({format_price(product.price, product.currency)}) exceeds your {intent.budget_currency} "
-                f"{intent.budget_max:,.0f} limit by approx. ${diff:.2f} USD"
+                f"Price ({format_price_in_inr(product.price, product.currency)}) exceeds your "
+                f"{format_price_in_inr(intent.budget_max, intent.budget_currency)} limit by approx. "
+                f"{format_price_in_inr(diff, 'INR')}"
             )
             what_needs_to_change.append(
-                f"Increase maximum budget to at least {format_price(product.price, product.currency)} (+${diff:.2f} USD)"
+                f"Increase maximum budget to at least "
+                f"{format_price_in_inr(product.price, product.currency)} "
+                f"(+{format_price_in_inr(diff, 'INR')})"
             )
 
     # Check category
-    if intent.category and product.category != intent.category:
+    if (
+        intent.category
+        and intent.category_is_explicit
+        and canonicalize_category(product.category)
+        != canonicalize_category(intent.category)
+    ):
         violated_hard.append(
             f"Category mismatch: product is '{product.category}', while you searched for '{intent.category}'"
         )
@@ -294,7 +325,7 @@ def analyze_why_not(
                 better_alts.append({
                     "product_id": alt.product_id,
                     "product_name": alt.product_name,
-                    "price_formatted": format_price(alt.price, alt.currency),
+                    "price_formatted": format_price_in_inr(alt.price, alt.currency),
                     "fit_score": round(alt_score, 1),
                     "reason": f"Scored higher ({alt_score:.1f}/100) and satisfies all verified constraints"
                 })
@@ -308,14 +339,14 @@ def analyze_why_not(
             c_prod = target_prods[0]
             c_scored = ranking_agent.rank([c_prod], intent) if intent else []
             c_score = c_scored[0][1].total_score if c_scored else None
-            price_diff = round((product.normalized_price_usd or product.price) - (c_prod.normalized_price_usd or c_prod.price), 2)
+            price_diff = round(product.price - c_prod.price, 2)
             compared_item = {
                 "product_id": c_prod.product_id,
                 "product_name": c_prod.product_name,
                 "brand": c_prod.brand,
-                "price_formatted": format_price(c_prod.price, c_prod.currency),
+                "price_formatted": format_price_in_inr(c_prod.price, c_prod.currency),
                 "fit_score": round(c_score, 1) if c_score is not None else None,
-                "price_difference_usd": price_diff,
+                "price_difference_inr": price_diff,
                 "why_better": f"Fully satisfies verified criteria and has higher customer rating ({c_prod.rating or 4.5}/5)"
             }
 
@@ -332,8 +363,12 @@ def analyze_why_not(
         unknown_attributes=unknown_attrs,
         what_needs_to_change=what_needs_to_change,
         price_analysis={
-            "product_price": format_price(product.price, product.currency),
-            "user_max_budget": f"{intent.budget_currency} {intent.budget_max:,.0f}" if intent.budget_max else "None",
+            "product_price": format_price_in_inr(product.price, product.currency),
+            "user_max_budget": (
+                format_price_in_inr(intent.budget_max, intent.budget_currency)
+                if intent.budget_max
+                else "None"
+            ),
             "is_over_budget": len(violated_hard) > 0 and "Price" in violated_hard[0]
         },
         fit_score=fit_score,

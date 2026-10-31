@@ -8,7 +8,8 @@ from typing import Optional, List
 from app.models.product import Product
 from app.models.state import ExtractedIntent, ComplementarySuggestion
 from app.services.catalog_service import load_and_validate_catalog
-from app.services.currency_service import format_price
+from app.services.currency_service import format_price_in_inr
+from app.services.currency_service import convert_currency
 
 
 # Domain pairings: Primary Category / Tag -> Complementary Product Definition
@@ -20,8 +21,8 @@ COMPLEMENTARY_CATALOG = {
             product_name="AeroPack Ultra-Lite Compression Packing Cubes (Set of 3)",
             brand="AeroPack",
             category="travel_accessories",
-            price=19.99,
-            currency="USD",
+            price=1665.83,
+            currency="INR",
             normalized_price_usd=19.99,
             rating=4.8,
             review_count=340,
@@ -43,8 +44,8 @@ COMPLEMENTARY_CATALOG = {
             product_name="SwiftDry Anti-Blister Cushioned Running Socks (3-Pack)",
             brand="SwiftDry",
             category="sports_accessories",
-            price=14.50,
-            currency="USD",
+            price=1208.33,
+            currency="INR",
             normalized_price_usd=14.50,
             rating=4.7,
             review_count=520,
@@ -66,8 +67,8 @@ COMPLEMENTARY_CATALOG = {
             product_name="OmniDock 7-in-1 Aluminum USB-C Hub with 4K HDMI & 100W PD",
             brand="OmniDock",
             category="electronics_accessories",
-            price=24.99,
-            currency="USD",
+            price=2082.50,
+            currency="INR",
             normalized_price_usd=24.99,
             rating=4.6,
             review_count=890,
@@ -89,8 +90,8 @@ COMPLEMENTARY_CATALOG = {
             product_name="AirStream Wireless Flight Audio Adapter with Dual Jack",
             brand="AirStream",
             category="audio_accessories",
-            price=18.00,
-            currency="USD",
+            price=1500.00,
+            currency="INR",
             normalized_price_usd=18.00,
             rating=4.5,
             review_count=210,
@@ -120,7 +121,10 @@ def find_complementary_suggestion(
         return None
 
     # Identify domain from top product category, tags, and user intent
-    text = f"{top_product.category} {top_product.product_name} {' '.join(top_product.tags)} {intent.intended_use or ''} {intent.category or ''}".lower()
+    text = (
+        f"{top_product.category} {top_product.product_name} "
+        f"{' '.join(top_product.tags)}"
+    ).lower()
 
     matched_key = None
     for domain_key, item in COMPLEMENTARY_CATALOG.items():
@@ -131,17 +135,32 @@ def find_complementary_suggestion(
     if not matched_key:
         return None
 
+    if matched_key == "audio_headphones":
+        return None
+    if matched_key == "laptops_tech" and not any(
+        marker in text for marker in ("usb-c", "usb c", "type-c", "type c")
+    ):
+        return None
+
     entry = COMPLEMENTARY_CATALOG[matched_key]
     companion = entry["product"]
 
-    # Budget consideration: ensure companion doesn't blow an explicit strict budget
+    # Do not recommend add-ons that take the combined spend beyond a hard ceiling.
     if intent.budget_max is not None and intent.is_budget_strict:
-        # If the primary item already consumed >95% of budget, don't upsell
-        if (top_product.normalized_price_usd or top_product.price) >= intent.budget_max * 0.95:
+        primary_price_inr = convert_currency(
+            top_product.price, top_product.currency, "INR"
+        )
+        budget_inr = convert_currency(
+            intent.budget_max, intent.budget_currency, "INR"
+        )
+        companion_price_inr = convert_currency(
+            companion.price, companion.currency, "INR"
+        )
+        if primary_price_inr + companion_price_inr > budget_inr:
             return None
 
     # Format localized price
-    price_str = format_price(companion.price, companion.currency)
+    price_str = format_price_in_inr(companion.price, companion.currency)
 
     return ComplementarySuggestion(
         product=companion,
@@ -149,5 +168,9 @@ def find_complementary_suggestion(
         why_relevant=entry["why_relevant"],
         price_formatted=price_str,
         is_pushy=False,
-        data_provenance="Verified Catalog Demonstration"
+        data_provenance=(
+            "Demo sample data"
+            if companion.provenance.is_sample_data
+            else "Verified catalog"
+        )
     )

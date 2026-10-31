@@ -11,8 +11,6 @@ from pydantic import BaseModel, Field
 
 from app.adapters.base import BaseStoreAdapter, StoreStatus, StoreStatusEnum, StoreSearchResult
 from app.adapters.local_catalog_adapter import LocalCatalogAdapter
-from app.adapters.amazon_adapter import AmazonIndiaAdapter
-from app.adapters.flipkart_adapter import FlipkartAdapter
 from app.models.product import Product
 from app.core.config import settings
 
@@ -42,10 +40,8 @@ class StoreAdapterRegistry:
         self._register_default_adapters()
 
     def _register_default_adapters(self):
-        """Initializes default adapters based on system configuration."""
+        """Registers the local mock database as the sole default product source."""
         self.register(LocalCatalogAdapter())
-        self.register(AmazonIndiaAdapter())
-        self.register(FlipkartAdapter())
 
     def register(self, adapter: BaseStoreAdapter):
         """Registers a store adapter."""
@@ -66,7 +62,7 @@ class StoreAdapterRegistry:
         query: str,
         category: Optional[str] = None,
         budget_max: Optional[float] = None,
-        currency: Optional[str] = "USD",
+        currency: Optional[str] = "INR",
         limit_per_store: int = 8,
         enabled_stores: Optional[List[str]] = None,
         timeout_seconds: Optional[float] = None,
@@ -194,7 +190,7 @@ class StoreAdapterRegistry:
         query: str,
         category: Optional[str] = None,
         budget_max: Optional[float] = None,
-        currency: Optional[str] = "USD",
+        currency: Optional[str] = "INR",
         limit_per_store: int = 8,
         enabled_stores: Optional[List[str]] = None,
         timeout_seconds: Optional[float] = None,
@@ -243,4 +239,3 @@ class StoreAdapterRegistry:
 
 # Global singleton registry
 adapter_registry = StoreAdapterRegistry()
-

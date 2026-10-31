@@ -1,20 +1,16 @@
-"""
-ShopSense AI — Multi-Currency Service
-Handles exchange rates, normalization to USD benchmark, and cross-currency comparisons.
-Guarantees that different currencies (e.g. USD vs INR) are never compared 1:1.
-"""
+"""Currency conversion with INR as the catalog and comparison currency."""
 
 from typing import Dict
 
-# Exchange rates relative to 1.0 USD benchmark
-EXCHANGE_RATES_TO_USD: Dict[str, float] = {
-    "USD": 1.0,
-    "INR": 0.012,    # ~83.33 INR per USD
-    "EUR": 1.08,     # ~0.925 EUR per USD
-    "GBP": 1.28,     # ~0.781 GBP per USD
-    "CAD": 0.74,     # ~1.35 CAD per USD
-    "AUD": 0.66,     # ~1.51 AUD per USD
-    "JPY": 0.0067,   # ~149 JPY per USD
+# Fixed demo rates expressed directly as INR per currency unit.
+EXCHANGE_RATES_TO_INR: Dict[str, float] = {
+    "INR": 1.0,
+    "USD": 83.3333333333,
+    "EUR": 90.0,
+    "GBP": 106.6666666667,
+    "CAD": 61.6666666667,
+    "AUD": 55.0,
+    "JPY": 0.5583333333,
 }
 
 CURRENCY_SYMBOLS: Dict[str, str] = {
@@ -38,15 +34,12 @@ def get_exchange_rate(from_currency: str, to_currency: str) -> float:
     if from_curr == to_curr:
         return 1.0
 
-    if from_curr not in EXCHANGE_RATES_TO_USD:
+    if from_curr not in EXCHANGE_RATES_TO_INR:
         raise ValueError(f"Unsupported source currency for conversion: {from_curr}")
-    if to_curr not in EXCHANGE_RATES_TO_USD:
+    if to_curr not in EXCHANGE_RATES_TO_INR:
         raise ValueError(f"Unsupported target currency for conversion: {to_curr}")
 
-    # Convert from -> USD -> to
-    usd_val = EXCHANGE_RATES_TO_USD[from_curr]
-    to_rate = EXCHANGE_RATES_TO_USD[to_curr]
-    return usd_val / to_rate
+    return EXCHANGE_RATES_TO_INR[from_curr] / EXCHANGE_RATES_TO_INR[to_curr]
 
 
 def convert_currency(amount: float, from_currency: str, to_currency: str) -> float:
@@ -57,10 +50,15 @@ def convert_currency(amount: float, from_currency: str, to_currency: str) -> flo
     return round(amount * rate, 2)
 
 
+def normalize_price_to_inr(amount: float, currency: str) -> float:
+    """
+    Standardizes a price to INR for ranking and filtering.
+    """
+    return convert_currency(amount, currency, "INR")
+
+
 def normalize_price_to_usd(amount: float, currency: str) -> float:
-    """
-    Standardizes a price to USD for normalized ranking and filtering.
-    """
+    """Legacy helper retained for callers that explicitly request a USD amount."""
     return convert_currency(amount, currency, "USD")
 
 
@@ -76,6 +74,11 @@ def format_price(amount: float, currency: str) -> str:
     return f"{symbol}{amount:,.2f}"
 
 
+def format_price_in_inr(amount: float, currency: str) -> str:
+    """Convert a product price to INR for consistent user-facing display."""
+    return format_price(convert_currency(amount, currency, "INR"), "INR")
+
+
 def compare_prices(price_a: float, curr_a: str, price_b: float, curr_b: str) -> int:
     """
     Compares two prices in potentially different currencies.
@@ -84,8 +87,8 @@ def compare_prices(price_a: float, curr_a: str, price_b: float, curr_b: str) -> 
        0 if price_a == price_b
        1 if price_a > price_b
     """
-    norm_a = normalize_price_to_usd(price_a, curr_a)
-    norm_b = normalize_price_to_usd(price_b, curr_b)
+    norm_a = normalize_price_to_inr(price_a, curr_a)
+    norm_b = normalize_price_to_inr(price_b, curr_b)
     diff = norm_a - norm_b
 
     if abs(diff) < 0.001:

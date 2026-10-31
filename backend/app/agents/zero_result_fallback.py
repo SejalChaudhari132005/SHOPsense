@@ -1,25 +1,24 @@
 """
-Agent 8: Zero-Result and Fallback Agent
-Recovers from empty or severely constrained search results by calculating intelligent
-constraint relaxations (e.g. relaxing budget ceiling by 15-20%, or loosening a strict color/brand).
-Never silently relaxes constraints—explicitly identifies what was changed.
+Agent 8: Zero-Result and Fallback Agent.
+
+Finds only category-compatible alternatives, keeps requested features and exclusions
+intact, and represents any budget or preference change as an approval proposal.
 """
 
-from typing import List, Optional, Dict, Any
+from typing import Dict, List, Optional, Tuple
+
 from app.models.product import Product
 from app.models.state import ExtractedIntent, FallbackSuggestion
-from app.services.catalog_service import (
-    load_and_validate_catalog,
-    search_by_category_and_keywords,
-    filter_by_price_and_attributes
+from app.services.catalog_service import load_and_validate_catalog, product_matches_subcategory
+from app.services.currency_service import (
+    convert_currency,
+    format_price_in_inr,
 )
-from app.services.currency_service import normalize_price_to_usd, format_price
+from app.services.retrieval_constraints import evaluate_recommendation_candidate
 
 
 class ZeroResultFallbackAgent:
-    """
-    Intelligently recovers from zero-result outcomes with transparent constraint relaxation diffs.
-    """
+    """Generate transparent fallback options without crossing product categories."""
 
     def __init__(self, catalog: Optional[List[Product]] = None):
         self._catalog = catalog
@@ -29,141 +28,240 @@ class ZeroResultFallbackAgent:
             self._catalog = load_and_validate_catalog()
         return self._catalog
 
+    @staticmethod
+    def _price_inr(product: Product) -> float:
+        return convert_currency(product.price, product.currency, "INR")
+
+    def _compatible_candidates(
+        self,
+        intent: ExtractedIntent,
+        *,
+        keep_budget: bool,
+    ) -> List[Product]:
+        candidate_intent = intent
+        if not keep_budget and intent.is_budget_strict:
+            candidate_intent = intent.model_copy(update={"is_budget_strict": False})
+
+        comparison_product_ids = set(intent.comparison_product_ids)
+        candidates = [
+            product
+            for product in self._get_catalog()
+            if (
+                not comparison_product_ids
+                or product.product_id in comparison_product_ids
+            )
+            if evaluate_recommendation_candidate(
+                product,
+                candidate_intent,
+                allow_related_subcategory=True,
+            ).is_eligible
+        ]
+        if intent.subcategory and intent.subcategory_is_explicit:
+            exact = [
+                product
+                for product in candidates
+                if product_matches_subcategory(product.subcategory, intent.subcategory)
+            ]
+            if exact:
+                candidates = exact
+        return sorted(candidates, key=self._price_inr)
+
+    @staticmethod
+    def _category_change(
+        intent: ExtractedIntent,
+        candidates: List[Product],
+    ) -> Tuple[Dict[str, object], List[str], str]:
+        if not intent.subcategory or not intent.subcategory_is_explicit:
+            return {}, [], "exact_matches"
+
+        related = [
+            product
+            for product in candidates
+            if not product_matches_subcategory(product.subcategory, intent.subcategory)
+        ]
+        if not related:
+            return {}, [], "exact_matches"
+        return (
+            {"subcategory": "related catalog subcategories"},
+            [f"Exact product type '{intent.subcategory}' was unavailable."],
+            "related_alternatives",
+        )
+
     def generate_fallback(
         self,
         intent: ExtractedIntent,
-        rejection_reasons: Optional[Dict[str, str]] = None
+        rejection_reasons: Optional[Dict[str, str]] = None,
     ) -> FallbackSuggestion:
-        all_products = self._get_catalog()
-        curr_symbol = "₹" if intent.budget_currency == "INR" else "$"
         original_constraints = {
             "category": intent.category,
+            "subcategory": intent.subcategory,
             "budget_max": intent.budget_max,
             "budget_currency": intent.budget_currency,
             "hard_constraints": intent.hard_constraints,
+            "feature_preferences": intent.feature_preferences,
             "exclusions": intent.exclusions,
             "colour": intent.colour,
             "brand": intent.brand,
-            "soft_preferences": intent.soft_preferences
+            "soft_preferences": intent.soft_preferences,
+        }
+        preserved_constraints = {
+            key: value
+            for key, value in {
+                "category": intent.category,
+                "budget_max": intent.budget_max,
+                "budget_currency": intent.budget_currency,
+                "hard_constraints": intent.hard_constraints,
+                "feature_preferences": intent.feature_preferences,
+                "exclusions": intent.exclusions,
+            }.items()
+            if value not in (None, {}, [])
         }
 
-        # Strategy 1: Independent Soft Preference / Aesthetic Relaxation (Keep Budget Intact)
-        if intent.soft_preferences or intent.brand or intent.colour:
-            category_candidates = search_by_category_and_keywords(
-                all_products,
-                category=intent.category,
-                keywords=[intent.intended_use] if intent.intended_use else None
+        in_budget = self._compatible_candidates(intent, keep_budget=True)
+        if in_budget:
+            relaxed, unmet, result_kind = self._category_change(intent, in_budget)
+            soft_changes: Dict[str, object] = {}
+            relaxable_soft_preferences = [
+                preference
+                for preference in intent.soft_preferences
+                if preference not in intent.feature_preferences
+            ]
+            if relaxable_soft_preferences:
+                soft_changes["soft_preferences"] = "relaxed"
+                unmet.extend(
+                    f"Soft preference '{preference}' was not required for these alternatives."
+                    for preference in relaxable_soft_preferences
+                )
+            if intent.brand:
+                soft_changes["brand"] = "relaxed"
+                unmet.append(f"Preferred brand '{intent.brand}' was not required.")
+            if intent.colour:
+                soft_changes["colour"] = "relaxed"
+                unmet.append(f"Preferred colour '{intent.colour}' was not required.")
+            relaxed.update(soft_changes)
+            if soft_changes:
+                result_kind = (
+                    "related_alternatives"
+                    if result_kind == "related_alternatives"
+                    else "relaxed_alternatives"
+                )
+
+            if relaxed:
+                explanation = (
+                    "These are relevant alternatives within your original budget and category. "
+                    "The listed changes need your approval before your search requirements change."
+                )
+                reason = "No exact result satisfied the complete request."
+            else:
+                explanation = (
+                    "Relevant catalog products satisfy the preserved requirements; no unrelated "
+                    "or cross-category products were used."
+                )
+                reason = "The search returned no candidates, but eligible catalog products remain."
+
+            return FallbackSuggestion(
+                fallback_needed=True,
+                result_kind=result_kind,
+                reason=reason,
+                relaxed_constraints=relaxed,
+                preserved_constraints=preserved_constraints,
+                original_constraints=original_constraints,
+                original_budget=intent.budget_max,
+                proposed_budget=intent.budget_max,
+                price_delta=0.0,
+                exact_change_made=(
+                    "; ".join(f"{key}: {value}" for key, value in relaxed.items())
+                ),
+                remaining_unmet_requirements=unmet,
+                relaxation_type=(
+                    "relax_soft_preference"
+                    if soft_changes
+                    else "catalog_broadening"
+                    if relaxed
+                    else "none"
+                ),
+                requires_user_approval=bool(relaxed),
+                suggested_alternatives=in_budget[:3],
+                explanation=explanation,
             )
 
-            # Filter strictly within original budget
-            strict_budget_candidates = filter_by_price_and_attributes(
-                category_candidates,
-                max_price=intent.budget_max,
-                target_currency=intent.budget_currency
-            ) if intent.budget_max is not None else category_candidates
-
-            if strict_budget_candidates:
-                relaxed_constraints = {
-                    "budget_max": intent.budget_max,
-                    "soft_preferences": "Relaxed to find in-budget items",
-                    "relaxation_type": "relax_soft_preference"
-                }
-                explanation = (
-                    f"We preserved your strict budget of {curr_symbol}{intent.budget_max:,.0f} by relaxing "
-                    f"secondary preferences. Found {len(strict_budget_candidates)} eligible candidates."
-                )
-                return FallbackSuggestion(
-                    fallback_needed=True,
-                    reason="Soft preferences were too narrow for available catalog stock.",
-                    relaxed_constraints=relaxed_constraints,
-                    original_constraints=original_constraints,
-                    original_budget=intent.budget_max,
-                    proposed_budget=intent.budget_max,
-                    price_delta=0.0,
-                    exact_change_made=f"Kept budget at {curr_symbol}{intent.budget_max:,.0f}; relaxed soft preferences ({', '.join(intent.soft_preferences or ['brand/color'])})",
-                    remaining_unmet_requirements=[f"Specific preference for {p}" for p in (intent.soft_preferences or [intent.brand or intent.colour])],
-                    relaxation_type="relax_soft_preference",
-                    requires_user_approval=True,
-                    suggested_alternatives=strict_budget_candidates[:3],
-                    explanation=explanation
-                )
-
-        # Strategy 2: Budget Relaxation (+25%)
-        if intent.budget_max is not None:
-            relaxed_budget = round(intent.budget_max * 1.25, 2)
-            price_delta = round(relaxed_budget - intent.budget_max, 2)
-            relaxed_constraints = {
-                "budget_max": relaxed_budget,
-                "relaxation_type": "budget_increase_25_percent"
+        compatible_without_budget = self._compatible_candidates(intent, keep_budget=False)
+        if intent.budget_max is not None and compatible_without_budget:
+            minimum = min(compatible_without_budget, key=self._price_inr)
+            minimum_price = convert_currency(
+                minimum.price,
+                minimum.currency,
+                "INR",
+            )
+            budget_inr = convert_currency(
+                intent.budget_max, intent.budget_currency, "INR"
+            )
+            price_delta = round(max(0.0, minimum_price - budget_inr), 2)
+            category_change, unmet, _ = self._category_change(
+                intent, compatible_without_budget
+            )
+            proposed_budget = round(minimum_price, 2)
+            relaxed_constraints: Dict[str, object] = {
+                "budget_max": proposed_budget,
+                **category_change,
             }
-
-            category_candidates = search_by_category_and_keywords(
-                all_products,
-                category=intent.category,
-                keywords=[intent.intended_use] if intent.intended_use else None
-            )
-
-            alternatives = filter_by_price_and_attributes(
-                category_candidates,
-                max_price=relaxed_budget,
-                target_currency=intent.budget_currency
-            )
-
-            if alternatives:
-                explanation = (
-                    f"No options were found strictly within your {curr_symbol}{intent.budget_max:,.0f} limit. "
-                    f"By adjusting the budget ceiling by +25% to {curr_symbol}{relaxed_budget:,.0f} (+{curr_symbol}{price_delta:.2f}), "
-                    f"we unlocked {len(alternatives)} matching products."
+            if price_delta:
+                unmet.insert(
+                    0,
+                    f"Price exceeds the original budget by "
+                    f"{format_price_in_inr(price_delta, 'INR')}.",
                 )
-                return FallbackSuggestion(
-                    fallback_needed=True,
-                    reason="Strict budget ceiling eliminated all matching candidates.",
-                    relaxed_constraints=relaxed_constraints,
-                    original_constraints=original_constraints,
-                    original_budget=intent.budget_max,
-                    proposed_budget=relaxed_budget,
-                    price_delta=price_delta,
-                    exact_change_made=f"Increased budget ceiling by +25% (from {curr_symbol}{intent.budget_max:,.0f} to {curr_symbol}{relaxed_budget:,.0f})",
-                    remaining_unmet_requirements=[f"Price exceeds original limit by up to {curr_symbol}{price_delta:.2f}"],
-                    relaxation_type="budget_increase",
-                    requires_user_approval=True,
-                    suggested_alternatives=alternatives[:3],
-                    explanation=explanation
-                )
-
-        # Strategy 3: Lowest Available in Category
-        alternatives = [p for p in all_products if p.category == intent.category][:3]
-        if not alternatives:
-            alternatives = all_products[:3]
-
-        if intent.budget_max is not None:
-            min_avail = alternatives[0]
-            price_delta = round((min_avail.normalized_price_usd or min_avail.price) - normalize_price_to_usd(intent.budget_max, intent.budget_currency), 2)
             explanation = (
-                f"Your budget limit of {curr_symbol}{intent.budget_max:,.0f} is below all available "
-                f"{intent.category or 'options'}. The lowest priced alternative starts at "
-                f"{format_price(min_avail.price, min_avail.currency)}."
+                f"The closest relevant option costs "
+                f"{format_price_in_inr(minimum_price, 'INR')}, "
+                f"above your {format_price_in_inr(budget_inr, 'INR')} limit. "
+                "Your budget will not change unless you approve this proposal."
             )
-            reason = f"Budget of {curr_symbol}{intent.budget_max:,.0f} is below minimum catalog price."
-            exact_change = f"Proposed entry-level alternative at {format_price(min_avail.price, min_avail.currency)}"
-        else:
-            explanation = "We broadened the search across our catalog to present popular related items."
-            reason = "Catalog did not match combined search constraints."
-            price_delta = 0.0
-            exact_change = "Broadened query to category demonstration candidates"
+            return FallbackSuggestion(
+                fallback_needed=True,
+                result_kind="relaxed_alternatives",
+                reason="No compatible product fits the original budget.",
+                relaxed_constraints=relaxed_constraints,
+                preserved_constraints={
+                    key: value
+                    for key, value in preserved_constraints.items()
+                    if key != "budget_max"
+                },
+                original_constraints=original_constraints,
+                original_budget=intent.budget_max,
+                proposed_budget=proposed_budget,
+                price_delta=price_delta,
+                exact_change_made=(
+                    "Proposed budget increase to "
+                    f"{format_price_in_inr(proposed_budget, 'INR')}"
+                ),
+                remaining_unmet_requirements=unmet,
+                relaxation_type="budget_increase",
+                requires_user_approval=True,
+                suggested_alternatives=[minimum],
+                explanation=explanation,
+            )
 
         return FallbackSuggestion(
             fallback_needed=True,
-            reason=reason,
-            relaxed_constraints={"category_broadening": True},
+            result_kind="no_valid_alternatives",
+            reason="No catalog products satisfy the preserved category, feature, and budget requirements.",
+            relaxed_constraints={},
+            preserved_constraints=preserved_constraints,
             original_constraints=original_constraints,
             original_budget=intent.budget_max,
-            proposed_budget=alternatives[0].price if alternatives else None,
-            price_delta=price_delta,
-            exact_change_made=exact_change,
-            remaining_unmet_requirements=["Exceeds original budget limit"] if intent.budget_max else [],
-            relaxation_type="catalog_broadening",
+            proposed_budget=intent.budget_max,
+            price_delta=0.0,
+            exact_change_made="",
+            remaining_unmet_requirements=[
+                "No relevant product was verified without changing a required constraint."
+            ],
+            relaxation_type="none",
             requires_user_approval=True,
-            suggested_alternatives=alternatives,
-            explanation=explanation
+            suggested_alternatives=[],
+            explanation=(
+                "I could not find a valid product in the requested category that meets your "
+                "required features and budget. Those requirements remain unchanged. Tell me "
+                "which requirement, if any, you would like to reconsider."
+            ),
         )

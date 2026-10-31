@@ -5,7 +5,7 @@ Tests all six advanced features and an end-to-end multi-feature scenario:
 2. Consented Preference Memory Across Sessions (durable vs temporary, view/edit/delete, toggle, user isolation)
 3. Visual Comparison Dashboard (hard/soft satisfaction, fit breakdown, unknown attributes, freshness, trade-offs)
 4. Budget-Relaxation Diff View (original vs proposed constraints, price delta, unmet requirements, approval flag)
-5. Context-Aware Follow-Up Suggestions (utility explanation, non-pushy, <= 1 item, verified demonstration)
+5. Context-Aware Follow-Up Suggestions (utility explanation, non-pushy, <= 1 item, sample provenance)
 6. Confidence-Gated Autonomy (clear, ambiguous, contradictory, underspecified queries with decision_reason)
 7. End-to-End Multi-Feature Scenario
 """
@@ -59,7 +59,7 @@ async def test_why_not_mode_comprehensive():
     # Direct comparison with UltraBook Pro
     assert res.compared_product is not None
     assert res.compared_product["product_id"] == "prod_elec_001"
-    assert res.compared_product["price_difference_usd"] > 0
+    assert res.compared_product["price_difference_inr"] > 0
 
     # 2. Product in catalog but not retrieved / mismatched category
     sess_footwear = SessionContext(
@@ -197,7 +197,7 @@ def test_visual_comparison_dashboard_rich_attributes():
         assert isinstance(p.unknown_attributes, list)
         # Freshness and store attribution
         assert len(p.data_source) > 0
-        assert "Catalog" in p.freshness or "Live" in p.freshness
+        assert p.freshness == "Demo sample data"
         # Trade-offs
         assert isinstance(p.trade_offs, list)
 
@@ -217,20 +217,21 @@ def test_budget_relaxation_diff_view_and_approval():
     """
     fallback_agent = ZeroResultFallbackAgent()
 
-    # Case A: Budget relaxation (+25%)
+    # Case A: Budget is below the lowest laptop price in the catalog.
     strict_budget_intent = ExtractedIntent(
         category="electronics",
-        budget_max=600.0,  # Minimum laptop is $699.99
+        subcategory="laptops",
+        budget_max=400.0,
         budget_currency="USD",
         is_budget_strict=True,
-        intended_use="programming laptop"
+        intended_use="unavailable specialty"
     )
     fallback = fallback_agent.generate_fallback(strict_budget_intent)
 
     assert fallback.fallback_needed is True
-    assert fallback.original_budget == 600.0
+    assert fallback.original_budget == 400.0
     assert fallback.proposed_budget is not None
-    assert fallback.proposed_budget > 600.0
+    assert fallback.proposed_budget > 400.0
     assert fallback.price_delta > 0.0
     assert len(fallback.exact_change_made) > 0
     assert fallback.requires_user_approval is True
@@ -252,6 +253,33 @@ def test_budget_relaxation_diff_view_and_approval():
     assert len(soft_fallback.remaining_unmet_requirements) > 0
 
 
+def test_fallback_does_not_report_in_budget_products_as_budget_shortfall():
+    fallback_agent = ZeroResultFallbackAgent()
+    intent = ExtractedIntent(
+        category="electronics",
+        subcategory="laptops",
+        budget_max=74999.17,
+        budget_currency="USD",
+        intended_use="unavailable specialty",
+    )
+
+    fallback = fallback_agent.generate_fallback(intent)
+
+    assert fallback.price_delta == 0.0
+    assert fallback.proposed_budget == intent.budget_max
+    assert fallback.suggested_alternatives[0].product_name == "AeroBook Air 13 Budget Notebook"
+    assert "below all available" not in fallback.explanation
+
+    below_minimum_intent = intent.model_copy(
+        update={"budget_max": 30000.0, "budget_currency": "INR"},
+    )
+    below_minimum_fallback = fallback_agent.generate_fallback(below_minimum_intent)
+
+    assert below_minimum_fallback.proposed_budget == 45832.5
+    assert below_minimum_fallback.price_delta == 15832.5
+    assert "₹" in below_minimum_fallback.explanation
+
+
 # ==========================================
 # Feature 5: Context-Aware Follow-Up Suggestions Tests
 # ==========================================
@@ -261,7 +289,7 @@ def test_context_aware_follow_up_suggestions():
     Feature 5: Offers at most ONE relevant, non-pushy companion item.
     - Backpack -> Packing cubes
     - Running shoes -> Running socks
-    - Verified demonstration provenance and utility explanation
+    - Sample-data provenance and utility explanation
     - Respects user budget and avoids aggressive upselling
     """
     # 1. Backpack pairing
@@ -286,7 +314,7 @@ def test_context_aware_follow_up_suggestions():
     assert len(suggestion.utility_explanation) > 10
     assert len(suggestion.why_relevant) > 5
     assert suggestion.is_pushy is False
-    assert suggestion.data_provenance == "Verified Catalog Demonstration"
+    assert suggestion.data_provenance == "Demo sample data"
 
     # 2. Running shoe pairing
     shoe = Product(
@@ -427,7 +455,7 @@ async def test_advanced_features_end_to_end_scenario(async_client: AsyncClient):
         assert len(follow_up["utility_explanation"]) > 0
 
     # Step 3: Why-Not Analysis:
-    # 3a. Candidate that is eligible but ranked lower (prod_foot_002)
+    # 3a. Candidate that remains eligible as a possible alternative (prod_foot_002)
     why_not_res = await async_client.post("/api/why-not/", json={
         "session_id": sess_id,
         "product_id": "prod_foot_002"
@@ -435,7 +463,7 @@ async def test_advanced_features_end_to_end_scenario(async_client: AsyncClient):
     assert why_not_res.status_code == 200
     wn_data = why_not_res.json()
     assert wn_data["is_eligible"] is True
-    assert wn_data["rejection_status"] == "ranked_lower"
+    assert wn_data["rejection_status"] == "possible_alternative"
     assert len(wn_data["better_alternatives"]) > 0
 
     # 3b. Candidate that was excluded due to category mismatch (prod_elec_001)

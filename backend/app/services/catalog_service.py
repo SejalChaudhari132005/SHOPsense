@@ -7,6 +7,7 @@ duplicate detection, attribute normalization, and missing-attribute tracking.
 import json
 import os
 import re
+from functools import lru_cache
 from typing import Dict, List, Optional, Any, Tuple
 from pathlib import Path
 
@@ -16,17 +17,21 @@ from app.models.product import (
     ProductProvenance,
     AvailabilityStatus
 )
-from app.services.currency_service import normalize_price_to_usd
+from app.services.currency_service import convert_currency
 
 # Canonical category synonym mapping
 CATEGORY_SYNONYMS: Dict[str, List[str]] = {
-    "footwear": ["shoes", "shoe", "sneakers", "boots", "runners", "trainers", "sandals", "slippers", "kicks"],
-    "clothing": ["apparel", "clothes", "shirt", "pants", "jacket", "hoodie", "outerwear", "t-shirt", "jeans"],
-    "electronics": ["tech", "gadgets", "laptop", "audio", "headphones", "earbuds", "charger", "monitor", "speaker"],
+    "footwear": ["shoes", "shoe", "sneakers", "boots", "runners", "trainers", "sandals", "slippers", "kicks", "mens-shoes", "womens-shoes"],
+    "clothing": ["apparel", "clothes", "shirt", "pants", "jacket", "hoodie", "outerwear", "t-shirt", "jeans", "mens-shirts", "tops", "womens-dresses"],
+    "electronics": ["tech", "gadgets", "laptop", "audio", "headphones", "earbuds", "charger", "monitor", "speaker", "laptops", "mobile-accessories", "smartphones", "tablets"],
     "travel_accessories": ["travel", "luggage", "travel pillow", "adapter", "passport holder", "packing cubes"],
-    "fitness_outdoor": ["fitness", "outdoor", "gym", "workout", "hiking", "camping", "yoga", "exercise", "trail"],
-    "home_kitchen": ["kitchen", "home", "cookware", "blender", "coffee maker", "appliances", "utensils"],
-    "bags_accessories": ["bag", "backpack", "tote", "duffel", "wallet", "purse", "messenger bag", "daypack"],
+    "fitness_outdoor": ["fitness", "outdoor", "gym", "workout", "hiking", "camping", "yoga", "exercise", "trail", "sports-accessories"],
+    "home_kitchen": ["kitchen", "home", "cookware", "blender", "coffee maker", "appliances", "utensils", "furniture", "home-decoration", "kitchen-accessories", "lighting"],
+    "bags_accessories": ["bag", "backpack", "tote", "duffel", "wallet", "purse", "messenger bag", "daypack", "womens-bags"],
+    "beauty_personal_care": ["beauty", "fragrances", "skin-care", "skincare"],
+    "fashion_accessories": ["jewelry", "jewellery", "womens-jewellery", "sunglasses", "mens-watches", "womens-watches"],
+    "groceries": ["grocery", "groceries"],
+    "automotive": ["motorcycle", "vehicle", "vehicles", "car", "cars", "automotive"],
 }
 
 # Attribute and feature synonyms
@@ -82,7 +87,7 @@ COLOR_MAP: Dict[str, str] = {
 
 def load_and_validate_catalog(file_path: Optional[str] = None) -> List[Product]:
     """
-    Loads JSON catalog, applies USD normalized benchmark prices, and validates against Product Pydantic model.
+    Loads JSON catalog, normalizes listing prices to INR, and calculates USD benchmark prices.
     """
     if file_path is None:
         # Default to root catalog
@@ -100,16 +105,61 @@ def load_and_validate_catalog(file_path: Optional[str] = None) -> List[Product]:
 
     products: List[Product] = []
     for item in raw_data:
-        # Compute normalized price in USD if not present
-        if "normalized_price_usd" not in item or item["normalized_price_usd"] is None:
-            price = float(item.get("price", 0.0))
-            curr = item.get("currency", "USD")
-            item["normalized_price_usd"] = normalize_price_to_usd(price, curr)
+        product_data = dict(item)
+        price = float(product_data.get("price", 0.0))
+        currency = str(product_data.get("currency") or "INR").upper()
+        if currency != "INR":
+            product_data["price"] = convert_currency(price, currency, "INR")
+        product_data["currency"] = "INR"
 
-        product = Product(**item)
+        product = Product(**product_data)
         products.append(product)
 
     return products
+
+
+@lru_cache(maxsize=1)
+def _catalog_product_names() -> Tuple[Tuple[str, Product], ...]:
+    products = load_and_validate_catalog()
+    return tuple(
+        (
+            " ".join(re.findall(r"[a-z0-9]+", product.product_name.lower())),
+            product,
+        )
+        for product in products
+    )
+
+
+def find_catalog_product_by_name(query: str) -> Optional[Product]:
+    normalized_query = " ".join(re.findall(r"[a-z0-9]+", query.lower()))
+    if not normalized_query:
+        return None
+
+    matches = [
+        (name, product)
+        for name, product in _catalog_product_names()
+        if len(name.split()) > 1 and name in normalized_query
+    ]
+    if not matches:
+        return None
+    return max(matches, key=lambda match: len(match[0]))[1]
+
+
+def find_catalog_products_mentioned(query: str) -> List[Product]:
+    """Find products named by their distinctive first two title words."""
+    normalized_query = " ".join(re.findall(r"[a-z0-9]+", query.casefold()))
+    if not normalized_query:
+        return []
+
+    matches: Dict[str, Product] = {}
+    for name, product in _catalog_product_names():
+        name_tokens = name.split()
+        if len(name_tokens) < 2 or len(name_tokens[0]) < 4 or len(name_tokens[1]) < 3:
+            continue
+        prefix = " ".join(name_tokens[:2])
+        if f" {prefix} " in f" {normalized_query} ":
+            matches.setdefault(prefix, product)
+    return list(matches.values())
 
 
 def canonicalize_category(query_category: str) -> str:
@@ -121,6 +171,51 @@ def canonicalize_category(query_category: str) -> str:
         if token == canonical or token in syns:
             return canonical
     return token
+
+
+def product_matches_subcategory(
+    product_subcategory: Optional[str],
+    requested_subcategory: Optional[str],
+) -> bool:
+    if not requested_subcategory:
+        return True
+    if not product_subcategory:
+        return False
+
+    def normalize(value: str) -> str:
+        return re.sub(r"[^a-z0-9]+", "_", value.strip().lower()).strip("_")
+
+    requested = normalize(requested_subcategory)
+    actual = normalize(product_subcategory)
+    subcategory_groups = {
+        "laptop": {"laptops"},
+        "notebook": {"laptops"},
+        "audio": {"headphones", "earbuds"},
+        "backpack": {"commuter_backpacks", "hiking_backpacks", "travel_backpacks"},
+        "running_shoe": {
+            "barefoot_running",
+            "road_running",
+            "trail_running",
+        },
+        "running_shoes": {
+            "barefoot_running",
+            "road_running",
+            "trail_running",
+        },
+        "hiking_boot": {"hiking_boots"},
+        "dress": {"dresses", "womens_dresses", "tops"},
+        "dresses": {"dresses", "womens_dresses", "tops"},
+        "womens_dresses": {"dresses", "womens_dresses", "tops"},
+    }
+
+    if actual == requested:
+        return True
+    if requested.endswith("s") and requested[:-1] == actual:
+        return True
+    if actual.endswith("s") and actual[:-1] == requested:
+        return True
+    group_key = requested[:-1] if requested.endswith("s") else requested
+    return actual in subcategory_groups.get(requested, subcategory_groups.get(group_key, set()))
 
 
 def match_synonyms(term: str, context: Optional[str] = None) -> List[str]:
@@ -280,7 +375,7 @@ def filter_by_price_and_attributes(
     products: List[Product],
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,
-    target_currency: str = "USD",
+    target_currency: str = "INR",
     attribute_filters: Optional[Dict[str, Any]] = None,
     size: Optional[str] = None,
     colour: Optional[str] = None
@@ -291,22 +386,22 @@ def filter_by_price_and_attributes(
     results: List[Product] = []
 
     # Convert min/max bounds to USD for consistent comparison
-    min_price_usd = normalize_price_to_usd(min_price, target_currency) if min_price is not None else None
-    max_price_usd = normalize_price_to_usd(max_price, target_currency) if max_price is not None else None
+    min_price_inr = convert_currency(min_price, target_currency, "INR") if min_price is not None else None
+    max_price_inr = convert_currency(max_price, target_currency, "INR") if max_price is not None else None
 
     # Canonicalize requested size & colour
     norm_size = normalize_attribute_values("size", size) if size else None
     norm_colour = normalize_attribute_values("colour", colour) if colour else None
 
     for p in products:
-        p_price_usd = p.normalized_price_usd or normalize_price_to_usd(p.price, p.currency)
+        p_price_inr = convert_currency(p.price, p.currency, "INR")
 
         # Min Price
-        if min_price_usd is not None and p_price_usd < min_price_usd:
+        if min_price_inr is not None and p_price_inr < min_price_inr:
             continue
 
         # Strict Max Price Ceiling (Rule #11)
-        if max_price_usd is not None and p_price_usd > max_price_usd:
+        if max_price_inr is not None and p_price_inr > max_price_inr:
             continue
 
         # Size matching
@@ -475,7 +570,7 @@ def sort_and_paginate(
 
     if sort_by == "price":
         sorted_items.sort(
-            key=lambda p: p.normalized_price_usd or normalize_price_to_usd(p.price, p.currency),
+            key=lambda p: convert_currency(p.price, p.currency, "INR"),
             reverse=not ascending
         )
     elif sort_by == "rating":

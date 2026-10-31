@@ -41,7 +41,7 @@ async def search_products(
     keyword: Optional[str] = Query(default=None, description="Search keyword"),
     min_price: Optional[float] = Query(default=None, ge=0.0, description="Minimum price boundary"),
     max_price: Optional[float] = Query(default=None, ge=0.0, description="Maximum price boundary"),
-    currency: str = Query(default="USD", description="Target currency for price bounds"),
+    currency: str = Query(default="INR", description="Target currency for price bounds"),
     size: Optional[str] = Query(default=None, description="Requested size"),
     colour: Optional[str] = Query(default=None, description="Requested color"),
     sort_by: str = Query(default="relevance", description="Sort field: price, rating, review_count, name"),

@@ -16,8 +16,16 @@ Covers:
 
 import pytest
 from httpx import AsyncClient
+from types import SimpleNamespace
+import json
 
-from app.models.state import IngestedQuery, ExtractedIntent
+from app.models.state import (
+    IngestedQuery,
+    ExtractedIntent,
+    PageProductEvidence,
+    ProductFitScore,
+    ProductRecommendation,
+)
 from app.agents.query_ingestion import QueryIngestionAgent
 from app.agents.intent_extraction import IntentExtractionAgent
 from app.agents.ambiguity_clarification import AmbiguityClarificationAgent
@@ -28,6 +36,8 @@ from app.agents.explanation_generation import ExplanationGenerationAgent
 from app.agents.zero_result_fallback import ZeroResultFallbackAgent
 from app.agents.session_memory import SessionMemoryAgent
 from app.agents.orchestrator import OrchestratorAgent
+from app.services.catalog_service import load_and_validate_catalog
+from app.services.llm_service import deterministic_extract_intent
 
 
 # ==========================================
@@ -79,6 +89,13 @@ def test_agent2_intent_extraction_gift_and_budget():
     assert intent.budget_currency == "INR"
     assert intent.is_budget_strict is True
     assert "lightweight" in intent.soft_preferences
+    assert intent.purchase_intent == "gift"
+    assert any(
+        constraint.name == "price"
+        and constraint.operator == "<="
+        and constraint.value == 8000.0
+        for constraint in intent.explicit_constraints
+    )
 
 
 def test_agent2_intent_extraction_negation_and_flexibility():
@@ -96,6 +113,118 @@ def test_agent2_intent_extraction_negation_and_flexibility():
     assert intent.is_budget_strict is False  # "around" means flexible
     assert "leather" in intent.exclusions
     assert "waterproof" in intent.soft_preferences
+    assert any(
+        constraint.name == "price" and constraint.operator == "approximately"
+        for constraint in intent.explicit_constraints
+    )
+
+
+def test_agent2_budget_defaults_to_inr_and_converts_foreign_amounts():
+    unmarked_budget = deterministic_extract_intent("electronics under 20000")
+    usd_budget = deterministic_extract_intent("headphones under $100")
+
+    assert unmarked_budget.budget_max == 20000.0
+    assert unmarked_budget.budget_currency == "INR"
+    assert usd_budget.budget_max == 8333.33
+    assert usd_budget.budget_currency == "INR"
+
+
+def test_agent2_health_inference_remains_a_soft_preference():
+    intent = deterministic_extract_intent("Comfortable hiking shoes for bad knees")
+
+    assert intent.health_considerations == ["joint discomfort"]
+    assert any(
+        preference.value == "joint-friendly / low-impact"
+        and preference.evidence == "bad knees"
+        for preference in intent.implicit_constraints
+    )
+    assert "joint-friendly" in intent.soft_preferences
+    assert "joint-friendly" not in intent.feature_preferences
+
+
+def test_agent2_explicit_query_terms_override_incorrect_llm_category(monkeypatch):
+    from app.agents import intent_extraction
+
+    monkeypatch.setattr(
+        intent_extraction,
+        "extract_intent_with_llm",
+        lambda query, history: ExtractedIntent(
+            category="bags_accessories",
+            subcategory="backpacks",
+        ),
+    )
+    query = "Suggest a lightweight packable rain jacket"
+
+    intent = IntentExtractionAgent().extract(
+        IngestedQuery(
+            session_id="rain-jacket-category-override",
+            raw_message=query,
+            sanitized_message=query,
+        )
+    )
+
+    assert intent.category == "clothing"
+    assert intent.subcategory == "jackets"
+    assert intent.category_is_explicit is True
+    assert intent.subcategory_is_explicit is True
+
+
+def test_agent2_groq_structured_extraction(monkeypatch):
+    from app.services import llm_service
+
+    response_payload = {
+        "shopping_intent": "gift_buying",
+        "purchase_intent": "gift",
+        "category": "footwear",
+        "subcategory": "boots",
+        "budget_max": 100.0,
+        "budget_currency": "USD",
+        "is_budget_strict": False,
+        "soft_preferences": [],
+        "explicit_constraints": [],
+        "implicit_constraints": [
+            {
+                "value": "joint-friendly / low-impact",
+                "evidence": "bad knees",
+                "confidence": 0.8,
+            }
+        ],
+        "health_considerations": ["joint discomfort"],
+    }
+
+    class FakeCompletions:
+        captured_messages = []
+
+        def create(self, **kwargs):
+            self.captured_messages = kwargs["messages"]
+            return SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(content=json.dumps(response_payload))
+                    )
+                ]
+            )
+
+    completions = FakeCompletions()
+    monkeypatch.setattr(
+        llm_service,
+        "groq_client",
+        SimpleNamespace(chat=SimpleNamespace(completions=completions)),
+    )
+    monkeypatch.setattr(llm_service.settings, "MOCK_LLM_FOR_TESTS", False)
+
+    query = "Gift boots around $100 for someone with bad knees"
+    intent = llm_service.extract_intent_with_llm(query)
+
+    assert intent.purchase_intent == "gift"
+    assert intent.budget_max == 8333.33
+    assert intent.budget_currency == "INR"
+    assert any(
+        constraint.name == "price" and constraint.operator == "approximately"
+        for constraint in intent.explicit_constraints
+    )
+    assert intent.implicit_constraints[0].evidence == "bad knees"
+    assert completions.captured_messages[-1] == {"role": "user", "content": query}
 
 
 def test_agent2_followup_refinement_merging():
@@ -119,8 +248,42 @@ def test_agent2_followup_refinement_merging():
 
     assert intent_t2.category == "electronics"
     assert intent_t2.subcategory == "laptops"
-    assert intent_t2.budget_max == 800.0  # 20% cheaper than 1000
+    assert intent_t2.budget_max == 66666.66  # 20% cheaper than INR equivalent of $1,000
+    assert intent_t2.budget_currency == "INR"
     assert intent_t2.colour == "black"
+
+
+def test_agent2_previous_intent_is_sent_as_extraction_context(monkeypatch):
+    from app.agents import intent_extraction
+
+    captured_history = []
+
+    def fake_extract(_query, history):
+        captured_history.extend(history)
+        return ExtractedIntent()
+
+    monkeypatch.setattr(intent_extraction, "extract_intent_with_llm", fake_extract)
+    previous_intent = ExtractedIntent(
+        shopping_intent="gift_buying",
+        category="footwear",
+        recipient="dad",
+    )
+    followup = IngestedQuery(
+        session_id="sess_02",
+        turn_id=2,
+        raw_message="size 10",
+        sanitized_message="size 10",
+    )
+
+    intent_extraction.IntentExtractionAgent().extract(
+        followup,
+        previous_intent=previous_intent,
+    )
+
+    assert len(captured_history) == 1
+    assert captured_history[0]["role"] == "assistant"
+    assert "structured shopping intent" in captured_history[0]["content"]
+    assert '"recipient":"dad"' in captured_history[0]["content"]
 
 
 # ==========================================
@@ -153,6 +316,61 @@ def test_agent3_clarification_sufficiently_clear_query():
     # Should proceed autonomously without bothering user
     assert decision.needs_clarification is False
     assert decision.clarification_question is None
+
+
+def test_agent3_gift_footwear_asks_for_missing_recipient_size():
+    agent = AmbiguityClarificationAgent(confidence_threshold=0.55)
+    intent = ExtractedIntent(
+        shopping_intent="gift_buying",
+        category="footwear",
+        recipient="dad",
+    )
+
+    decision = agent.evaluate(intent)
+
+    assert decision.needs_clarification is True
+    assert decision.missing_critical_fields == ["recipient_size"]
+    assert "size" in decision.clarification_question.lower()
+    assert "size-free gift accessories" in decision.clarification_question.lower()
+    assert decision.suggested_options == ["Show size-free gift accessories"]
+
+
+def test_agent2_size_free_gift_choice_switches_away_from_sized_category():
+    agent = IntentExtractionAgent()
+    previous_intent = deterministic_extract_intent(
+        "Birthday gift boots for my dad under $200"
+    )
+    followup = IngestedQuery(
+        session_id="sess_02",
+        turn_id=2,
+        raw_message="Show size-free gift accessories",
+        sanitized_message="Show size-free gift accessories",
+    )
+
+    intent = agent.extract(followup, previous_intent=previous_intent)
+
+    assert intent.category is None
+    assert intent.category_is_explicit is False
+    assert intent.purchase_intent == "gift"
+    assert intent.recipient == "dad"
+    assert intent.budget_max == 16666.67
+    assert intent.budget_currency == "INR"
+    assert not any(constraint.name == "size" for constraint in intent.explicit_constraints)
+
+
+def test_agent3_does_not_ask_for_gift_size_when_known():
+    agent = AmbiguityClarificationAgent(confidence_threshold=0.55)
+    intent = ExtractedIntent(
+        shopping_intent="gift_buying",
+        category="footwear",
+        recipient="dad",
+        size="10",
+    )
+
+    decision = agent.evaluate(intent)
+
+    assert decision.needs_clarification is False
+    assert "recipient_size" not in decision.missing_critical_fields
 
 
 def test_agent3_no_repeated_questions():
@@ -215,6 +433,56 @@ def test_agent5_candidate_retrieval_and_exclusions():
         assert "leather" not in desc_lower
 
 
+def test_laptop_search_excludes_other_electronics_and_explains_matches():
+    intent = deterministic_extract_intent(
+        "Find me a laptop for programming under ₹60,000"
+    )
+    mapping = CatalogAttributeMappingAgent().map_attributes(intent)
+    retrieval = CandidateRetrievalAgent().retrieve(
+        intent,
+        mapping,
+        enabled_stores=["local_catalog"],
+    )
+    ranked = RankingFitScoringAgent().rank(retrieval.candidates, intent)
+    recommendations = ExplanationGenerationAgent().explain(ranked, intent)
+
+    assert retrieval.candidates
+    assert all(product.subcategory == "laptops" for product in retrieval.candidates)
+    assert recommendations
+    assert all(
+        recommendation.product.subcategory == "laptops"
+        for recommendation in recommendations
+    )
+    assert recommendations[0].fit_score.use_case_score == 0
+    assert any("programming" in trade_off for trade_off in recommendations[0].trade_offs)
+    assert "does not list it for programming" in recommendations[0].explanation
+    assert all(
+        "category:" not in benefit
+        and "subcategory:" not in benefit
+        and "budget_friendly" not in benefit
+        for recommendation in recommendations
+        for benefit in recommendation.key_benefits
+    )
+    assert all(
+        "category:electronics" not in recommendation.explanation
+        and "subcategory:laptops" not in recommendation.explanation
+        and "budget_friendly" not in recommendation.explanation
+        for recommendation in recommendations
+    )
+
+    charger = next(
+        product
+        for product in load_and_validate_catalog()
+        if product.subcategory == "chargers"
+    )
+    charger_score = RankingFitScoringAgent().rank([charger], intent)[0][1]
+    assert charger_score.is_eligible is False
+    assert any(
+        "does not match 'laptops'" in violation
+        for violation in charger_score.violated_hard_constraints
+    )
+
+
 # ==========================================
 # Agent 6: Ranking & Fit Scoring Tests
 # ==========================================
@@ -271,6 +539,70 @@ def test_agent7_explanation_generation():
     assert top_rec.product is not None
     assert "recommend" in top_rec.explanation.lower()
     assert len(top_rec.key_benefits) > 0
+
+
+def test_agent7_batches_grounded_narratives_with_page_specifications(monkeypatch):
+    from app.services import llm_service
+
+    product = load_and_validate_catalog()[0]
+    recommendation = ProductRecommendation(
+        product=product,
+        fit_score=ProductFitScore(
+            product_id=product.product_id,
+            product_name=product.product_name,
+            total_score=82.0,
+            exact_matches=["category:electronics"],
+        ),
+        explanation="Deterministic explanation.",
+    )
+    intent = ExtractedIntent(
+        page_analysis_requested=True,
+        page_product=PageProductEvidence(
+            product_name="Page Laptop",
+            price=899.99,
+            currency="USD",
+            specifications={"RAM": "16GB", "Storage": "512GB SSD"},
+        ),
+    )
+    completions_calls = []
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            completions_calls.append(kwargs)
+            return SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(
+                            content=json.dumps({
+                                "page_analysis": "The captured page lists 16GB RAM and 512GB SSD.",
+                                "recommendations": [{
+                                    "product_id": product.product_id,
+                                    "explanation": "A catalog match with verified electronics category.",
+                                }],
+                            })
+                        )
+                    )
+                ]
+            )
+
+    monkeypatch.setattr(
+        llm_service,
+        "groq_client",
+        SimpleNamespace(chat=SimpleNamespace(completions=FakeCompletions())),
+    )
+    monkeypatch.setattr(llm_service.settings, "MOCK_LLM_FOR_TESTS", False)
+
+    updated, page_analysis = llm_service.generate_recommendation_narrative(
+        [recommendation],
+        intent,
+    )
+
+    assert len(completions_calls) == 1
+    evidence = json.loads(completions_calls[0]["messages"][-1]["content"])
+    assert evidence["page_product"]["specifications"]["RAM"] == "16GB"
+    assert evidence["recommendations"][0]["product_id"] == product.product_id
+    assert updated[0].explanation == "A catalog match with verified electronics category."
+    assert page_analysis == "The captured page lists 16GB RAM and 512GB SSD."
 
 
 # ==========================================
@@ -333,8 +665,8 @@ def test_agent10_orchestrator_acceptance_scenario():
     """
     CRITICAL ACCEPTANCE CRITERIA:
     'I need a birthday gift for my dad who enjoys hiking. Keep it under ₹8,000 and prioritize lightweight products.'
-    Must extract constraints, retrieve candidates, enforce the ₹8,000 budget (~$96 USD),
-    rank eligible products, explain results, and NOT ask unnecessary questions.
+    Must extract gift, occasion, recipient, activity, and budget without inventing a
+    category; it should ask which catalog category to explore.
     """
     orchestrator = OrchestratorAgent()
     query = "I need a birthday gift for my dad who enjoys hiking. Keep it under ₹8,000 and prioritize lightweight products."
@@ -345,30 +677,19 @@ def test_agent10_orchestrator_acceptance_scenario():
         turn_id=1
     )
 
-    # 1. Action taken must be 'recommend' without unnecessary clarification interruption
-    assert response.action_taken == "recommend"
-    assert response.clarification is None
-
-    # 2. Recommendations returned
-    assert len(response.recommendations) >= 1
-
-    # 3. All recommendations must strictly respect ₹8,000 limit (~$96.00 USD)
-    max_usd = 8000.0 * 0.012  # $96.00 USD
-    for rec in response.recommendations:
-        assert rec.product.normalized_price_usd <= max_usd, (
-            f"Product {rec.product.product_id} price (${rec.product.normalized_price_usd}) "
-            f"exceeds ₹8,000 limit (${max_usd})"
-        )
-
-    # 4. Top recommendation must be hiking-appropriate and explain gift/hiking relevance
-    top_rec = response.recommendations[0]
-    assert top_rec.fit_score.is_eligible is True
-    assert top_rec.fit_score.total_score >= 60.0
-    assert "dad" in response.message.lower() or "hiking" in response.message.lower()
-
-    # 5. Visual comparison dashboard breakdown is populated
-    assert response.top_three_comparison is not None
-    assert len(response.top_three_comparison) >= 1
+    assert response.action_taken == "clarify"
+    assert response.clarification is not None
+    assert response.recommendations == []
+    assert "gift" in response.message.lower()
+    intent = orchestrator.workflow.session_memory_agent.get_or_create_session(
+        "acceptance_sess_01"
+    ).current_intent
+    assert intent is not None
+    assert intent.category is None
+    assert intent.budget_max == 8000
+    assert intent.recipient == "dad"
+    assert intent.occasion == "birthday"
+    assert intent.intended_use == "hiking"
 
 
 def test_agent10_orchestrator_clarification_flow():
@@ -424,6 +745,6 @@ async def test_api_chat_endpoint_e2e(async_client: AsyncClient):
     response = await async_client.post("/api/chat/", json=payload)
     assert response.status_code == 200
     data = response.json()
-    assert data["action_taken"] == "recommend"
-    assert len(data["recommendations"]) >= 1
-    assert "top_three_comparison" in data
+    assert data["action_taken"] == "clarify"
+    assert data["recommendations"] == []
+    assert "Available catalog categories" in data["message"]

@@ -35,27 +35,21 @@ class Settings(BaseSettings):
     # Storage & Catalog
     SQLITE_DB_PATH: str = str(BACKEND_DIR / "data" / "shopsense_preferences.db")
     CATALOG_PATH: str = str(PROJECT_ROOT / "catalog" / "demo_products.json")
+    HYBRID_EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
+    HYBRID_INDEX_CACHE_DIR: str = str(BACKEND_DIR / "data" / "hybrid_index")
+    HYBRID_RRF_K: int = Field(default=60, ge=1)
+    HYBRID_RETRIEVAL_LIMIT: int = Field(default=20, ge=1)
+    HYBRID_MIN_COSINE_SIMILARITY: float = Field(default=0.15, ge=-1.0, le=1.0)
+    HYBRID_COSINE_FLOOR: float = Field(default=0.25, ge=-1.0, le=1.0)
+    HYBRID_COSINE_CEIL: float = Field(default=0.60, ge=-1.0, le=1.0)
+    MIN_RELEVANCE: float = Field(default=0.30, ge=0.0, le=1.0)
 
     # Testing & Mocking (automatically mock during pytest to preserve API quotas and avoid 429 rate limits)
     MOCK_LLM_FOR_TESTS: bool = ("pytest" in sys.modules or "PYTEST_CURRENT_TEST" in os.environ)
 
-    # Multi-Store Adapter Integrations
-    # Amazon India (Product Advertising API 5.0)
-    AMAZON_PA_API_KEY: str = Field(default="", description="Amazon PA-API Access Key ID")
-    AMAZON_PA_API_SECRET: str = Field(default="", description="Amazon PA-API Secret Key")
-    AMAZON_ASSOCIATE_TAG: str = Field(default="", description="Amazon India Associates Tracking Tag (e.g. yourtag-21)")
-    AMAZON_REGION: str = "eu-west-1"
-    AMAZON_HOST: str = "webservices.amazon.in"
-    AMAZON_ENABLE_MOCK_FALLBACK: bool = True
-
-    # Flipkart Affiliate API
-    FLIPKART_AFFILIATE_ID: str = Field(default="", description="Flipkart Affiliate Tracking ID")
-    FLIPKART_AFFILIATE_TOKEN: str = Field(default="", description="Flipkart Affiliate API Token")
-    FLIPKART_ENABLE_MOCK_FALLBACK: bool = True
-
-    # Multi-Store Orchestration Settings
+    # Local mock catalog is the only default product source.
     STORE_ADAPTER_TIMEOUT_SECONDS: float = 3.0
-    ENABLED_STORE_ADAPTERS: List[str] = ["local_catalog", "amazon_in", "flipkart"]
+    ENABLED_STORE_ADAPTERS: List[str] = ["local_catalog"]
 
     model_config = SettingsConfigDict(
         env_file=(
