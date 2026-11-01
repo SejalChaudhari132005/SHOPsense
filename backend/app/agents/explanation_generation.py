@@ -12,6 +12,7 @@ from app.services.currency_service import format_price_in_inr
 from app.services.retrieval_constraints import evaluate_recommendation_candidate
 from app.services.llm_service import (
     generate_explanation_template,
+    validate_explanation,
     generate_recommendation_narrative,
 )
 
@@ -69,6 +70,16 @@ class ExplanationGenerationAgent:
 
             # Generate natural language associate explanation
             explanation_text = generate_explanation_template(product, intent, fit_score)
+            if not validate_explanation(
+                explanation_text,
+                product,
+                intent,
+                fit_score,
+            ):
+                explanation_text = (
+                    f"{product.brand} {product.product_name} matches your "
+                    f"requested {product.category.replace('_', ' ')} category."
+                )
 
             # Add comparative rank note if top candidate
             if idx == 0 and len(eligible_items) > 1:

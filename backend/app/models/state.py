@@ -83,7 +83,15 @@ class ExtractedIntent(BaseModel):
     subcategory: Optional[str] = Field(default=None, description="Granular product subcategory")
     product_query: Optional[str] = Field(
         default=None,
-        description="Exact catalog product name recognized in the user's query",
+        description="Specific product phrase named in the current request",
+    )
+    continues_previous: bool = Field(
+        default=False,
+        description="Whether this message answers or refines the previous request",
+    )
+    topic_changed: bool = Field(
+        default=False,
+        description="Whether this turn starts a new product topic",
     )
     comparison_product_ids: List[str] = Field(
         default_factory=list,
@@ -105,6 +113,10 @@ class ExtractedIntent(BaseModel):
     is_budget_strict: bool = Field(
         default=True, 
         description="True for hard ceiling ('under ₹8000'), False for flexible preference ('around ₹8000')"
+    )
+    budget_is_approximate: bool = Field(
+        default=False,
+        description="Whether the stated budget is approximate rather than an exact ceiling",
     )
     budget_unlimited: bool = Field(
         default=False,
@@ -190,6 +202,30 @@ class ExtractedIntent(BaseModel):
             # 3. Normalize is_budget_strict
             if data.get("is_budget_strict") is None:
                 data["is_budget_strict"] = True
+            for boolean_key, default in (
+                ("budget_is_approximate", False),
+                ("budget_unlimited", False),
+                ("exclude_sized_items", False),
+                ("continues_previous", False),
+                ("topic_changed", False),
+                ("category_is_explicit", True),
+                ("subcategory_is_explicit", True),
+                ("is_refinement", False),
+                ("page_analysis_requested", False),
+            ):
+                value = data.get(boolean_key)
+                if value is None:
+                    data[boolean_key] = default
+                elif isinstance(value, str):
+                    normalized = value.strip().casefold()
+                    if normalized in {"true", "yes", "1"}:
+                        data[boolean_key] = True
+                    elif normalized in {"false", "no", "0"}:
+                        data[boolean_key] = False
+                    else:
+                        data[boolean_key] = default
+                elif not isinstance(value, bool):
+                    data[boolean_key] = default
             # 4. Normalize hard_constraints if returned as list or non-dict
             hc = data.get("hard_constraints")
             if isinstance(hc, list):
@@ -246,6 +282,10 @@ class ClarificationDecision(BaseModel):
     ambiguity_factors: List[str] = Field(default_factory=list, description="Detected ambiguous words or conflicting constraint pairs")
     catalog_coverage_feasible: bool = Field(default=True, description="True if catalog contains potential matches for the category")
     reason: Optional[str] = None
+    actions: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Structured clarification actions such as category or size selections",
+    )
 
 
 # ==========================================
@@ -364,6 +404,10 @@ class FallbackSuggestion(BaseModel):
     requires_user_approval: bool = Field(default=True, description="Strictly requires user confirmation before updating active session constraints")
     suggested_alternatives: List[Product] = Field(default_factory=list, description="Alternative products found")
     explanation: str = Field(..., description="Friendly explanation of the trade-off")
+    actions: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Structured approval, rejection, and alternative-selection actions",
+    )
 
 
 # ==========================================
@@ -393,6 +437,8 @@ class SessionContext(BaseModel):
     questions_asked: List[str] = Field(default_factory=list)
     shown_product_ids: List[str] = Field(default_factory=list)
     rejected_product_ids: List[str] = Field(default_factory=list)
+    awaiting_clarification: bool = False
+    last_response_kind: Optional[str] = None
     latest_refinements: List[str] = Field(default_factory=list)
     last_updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -404,7 +450,10 @@ class SessionContext(BaseModel):
 class OrchestratorResponse(BaseModel):
     session_id: str
     turn_id: int
-    action_taken: str = Field(..., description="'recommend', 'clarify', 'fallback', or 'error'")
+    action_taken: str = Field(
+        ...,
+        description="'recommend', 'clarify', 'fallback', 'compare', or 'error'",
+    )
     message: str = Field(..., description="Primary conversational associate response to the user")
     analysis_summary: Optional[str] = Field(
         default=None,
@@ -451,6 +500,8 @@ class ShopSenseGraphState(TypedDict, total=False):
     ranked_candidates: List[Tuple[Product, ProductFitScore]]
     retrieval_scores: Dict[str, float]
     retrieval_sources: Dict[str, List[str]]
+    relevance_scores: Dict[str, float]
+    near_misses: List[Product]
     retrieval_mode: str
     recommendations: List[ProductRecommendation]
     analysis_summary: Optional[str]
@@ -463,4 +514,6 @@ class ShopSenseGraphState(TypedDict, total=False):
     store_statuses: List[Dict[str, Any]]
     error_information: Optional[str]
     workflow_status: str
+    session_boundary: str
+    comparison_response: Optional[Dict[str, Any]]
     final_response: Optional[OrchestratorResponse]

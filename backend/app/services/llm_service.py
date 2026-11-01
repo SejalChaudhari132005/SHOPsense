@@ -24,11 +24,87 @@ from app.services.catalog_service import (
     canonicalize_category,
     find_catalog_product_by_name,
     find_catalog_products_mentioned,
+    load_and_validate_catalog,
     match_synonyms,
+    SUBCATEGORY_SYNONYMS,
 )
 from app.services.currency_service import convert_currency, format_price_in_inr
 
 logger = logging.getLogger(__name__)
+
+_INTENT_STOPWORDS = {
+    "a", "an", "the", "i", "me", "my", "for", "to", "with", "and", "or",
+    "under", "below", "less", "than", "within", "around", "about", "roughly",
+    "recommend", "recommendation", "suggest", "suggestion", "suitable",
+    "something", "anything", "items", "item", "things", "problem",
+    "problems", "issue", "issues", "help", "looking", "find", "show",
+    "get", "need", "want",
+    "please", "some", "good", "best", "option", "options", "product",
+    "products", "budget", "inr", "rs", "rupees", "usd", "dollars",
+    "size", "free", "without", "sizing", "only", "must", "required",
+    "gift", "present", "nice",
+}
+
+
+def residual_product_terms(message: str, intent: ExtractedIntent) -> Optional[str]:
+    """Extract a catalog-grounded product phrase not represented by other slots."""
+    normalized = re.findall(r"[a-z0-9]+", message.casefold())
+    covered = {
+        token
+        for value in (
+            intent.category,
+            intent.category_hint,
+            intent.subcategory,
+            intent.intended_use,
+            intent.brand,
+            intent.colour,
+            *intent.feature_preferences,
+            *intent.soft_preferences,
+            *intent.exclusions,
+        )
+        if isinstance(value, str)
+        for token in re.findall(r"[a-z0-9]+", value.casefold())
+    }
+    residual = [
+        token for token in normalized
+        if token not in _INTENT_STOPWORDS
+        and token not in covered
+        and not token.isdigit()
+    ]
+    if not residual:
+        return None
+
+    catalog_tokens = {
+        token
+        for product in load_and_validate_catalog()
+        for value in (
+            product.product_name,
+            product.subcategory or "",
+            *product.tags,
+        )
+        for token in re.findall(r"[a-z0-9]+", value.casefold())
+    }
+    grounded = [token for token in residual if token in catalog_tokens]
+    return " ".join(grounded) if grounded else None
+
+
+def catalog_product_phrase(message: str) -> Optional[str]:
+    """Return the longest catalog taxonomy phrase explicitly present in text."""
+    normalized = " ".join(re.findall(r"[a-z0-9]+", message.casefold()))
+    phrases = set()
+    for product in load_and_validate_catalog():
+        if product.subcategory:
+            phrases.add(product.subcategory.replace("_", " "))
+            phrases.update(SUBCATEGORY_SYNONYMS.get(product.subcategory, []))
+        name_tokens = re.findall(r"[a-z0-9]+", product.product_name.casefold())
+        if len(name_tokens) >= 2:
+            phrases.add(" ".join(name_tokens[:2]))
+    matches = [
+        phrase for phrase in phrases
+        if len(phrase.split()) >= 1
+        and re.search(rf"\b{re.escape(phrase)}\b", normalized)
+    ]
+    return max(matches, key=lambda phrase: (len(phrase.split()), len(phrase))) if matches else None
 
 # Initialize Groq client if key is configured
 groq_client = None
@@ -99,24 +175,27 @@ def normalize_intent_contract(intent: ExtractedIntent, query: str) -> ExtractedI
                 break
 
     health_patterns = (
-        (r"\b(?:bad knees?|knee pain|knee discomfort|joint pain|joint discomfort)\b", "joint-friendly / low-impact"),
+        (r"\b(?:bad knees?|problem with knees?|knee pain|knee discomfort)\b", "joint discomfort", "joint-friendly", "joint-friendly / low-impact"),
+        (r"\b(?:joint pain|joint discomfort|joint problem|joint problems)\b", "joint discomfort", "joint-friendly", "joint-friendly / low-impact"),
+        (r"\b(?:back pain|back problem|back problems)\b", "back discomfort", "back-friendly", "back-friendly / low-impact"),
+        (r"\b(?:arthritis|arthritic)\b", "arthritis consideration", "joint-friendly", "joint-friendly / low-impact"),
+        (r"\b(?:ankle pain|ankle problem|ankle problems|weak ankles?)\b", "ankle discomfort", "ankle-friendly", "ankle-friendly / supportive"),
     )
     existing_inferences = {(item.value.casefold(), item.evidence.casefold()) for item in intent.implicit_constraints}
-    for pattern, preference in health_patterns:
+    for pattern, health_label, preference, inferred_value in health_patterns:
         match = re.search(pattern, query, re.IGNORECASE)
         if match:
             evidence = match.group(0)
-            key = (preference.casefold(), evidence.casefold())
+            key = (inferred_value.casefold(), evidence.casefold())
             if key not in existing_inferences:
                 intent.implicit_constraints.append(
-                    InferredPreference(value=preference, evidence=evidence, confidence=0.8)
+                    InferredPreference(value=inferred_value, evidence=evidence, confidence=0.8)
                 )
                 existing_inferences.add(key)
-            health_label = "joint discomfort"
             if health_label not in intent.health_considerations:
                 intent.health_considerations.append(health_label)
-            if "joint-friendly" not in intent.soft_preferences:
-                intent.soft_preferences.append("joint-friendly")
+            if preference not in intent.soft_preferences:
+                intent.soft_preferences.append(preference)
             intent.feature_preferences = [
                 feature for feature in intent.feature_preferences
                 if feature.casefold() not in {"joint-friendly", "knee support", "low-impact"}
@@ -283,12 +362,14 @@ def deterministic_extract_intent(query: str, history: Optional[List[Dict[str, st
 
     if contains_term("shoe", "shoes", "sneaker", "sneakers", "boot", "boots", "footwear", "loafer"):
         category = "footwear"
-        if re.search(r"\btrail\s+running\s+shoes?\b", lower_text):
-            subcategory = "running_shoes"
+        if re.search(r"\btrail(?:\s+running)?\s+shoes?\b", lower_text):
+            subcategory = "trail_running"
         elif re.search(r"\broad\s+running\s+shoes?\b", lower_text):
-            subcategory = "running_shoes"
+            subcategory = "road_running"
         elif re.search(r"\brunning\s+shoes?\b", lower_text):
             subcategory = "running_shoes"
+        elif re.search(r"\bhiking\s+boots?\b", lower_text):
+            subcategory = "hiking_boots"
     elif contains_term("laptop", "laptops", "notebook", "notebooks", "headphone", "headphones", "earbud", "earbuds", "charger", "chargers", "camera", "cameras", "tablet", "tablets", "ipad", "tech", "electronics"):
         category = "electronics"
         if "laptop" in lower_text:
@@ -349,6 +430,7 @@ def deterministic_extract_intent(query: str, history: Optional[List[Dict[str, st
     budget_min = None
     budget_currency = "INR"
     is_budget_strict = True
+    budget_is_approximate = False
 
     # Check currency with word boundaries (prevents 'rs' matching 'dollars')
     if "₹" in text or re.search(r"\b(?:inr|rupees|rs\.?)\b", lower_text):
@@ -363,6 +445,7 @@ def deterministic_extract_intent(query: str, history: Optional[List[Dict[str, st
     # Flexibility vs Strict limit
     if any(flex in lower_text for flex in ["around", "approx", "roughly", "about"]):
         is_budget_strict = False
+        budget_is_approximate = True
 
     number = r"[\$₹€£]?\s*(\d+(?:,\d+)*(?:\.\d+)?)"
     range_match = re.search(
@@ -389,9 +472,23 @@ def deterministic_extract_intent(query: str, history: Optional[List[Dict[str, st
         budget_max = float(max_match.group(1).replace(",", ""))
     else:
         # Direct currency amount (e.g. "₹8,000", "$150", "₹5,000")
-        direct_curr_match = re.search(r"[\$₹€£]\s*(\d+(?:,\d+)*(?:\.\d+)?)", text)
+        direct_curr_match = re.search(
+            r"(?:[\$₹€£]|(?:inr|usd|eur|gbp|rs\.?|rupees?|dollars?|euros?|pounds?))\s*"
+            r"(\d+(?:,\d+)*(?:\.\d+)?)",
+            lower_text,
+        )
         if direct_curr_match:
             budget_max = float(direct_curr_match.group(1).replace(",", ""))
+
+    # A direct answer to a requested budget is a ceiling unless the user
+    # explicitly signals approximation or uses a lower/upper-bound qualifier.
+    if (
+        budget_max is not None
+        and not budget_is_approximate
+        and re.search(r"\b(?:budget|spend|price range)\s*(?:is|of|:)", lower_text)
+        and not re.search(r"\b(?:under|below|less than|within|max|above|over|at least)\b", lower_text)
+    ):
+        is_budget_strict = True
 
 
     # 4. Soft Preferences & Features
@@ -443,8 +540,14 @@ def deterministic_extract_intent(query: str, history: Optional[List[Dict[str, st
 
     # 7. Hard Constraints
     hard_constraints: Dict[str, Any] = {}
-    if "waterproof" in lower_text and any(strict in lower_text for strict in ["must be waterproof", "strictly waterproof", "needs to be waterproof"]):
+    mandatory_feature = bool(re.search(
+        r"\b(?:must|only|required|needs?\s+to\s+be|at\s+least|strictly)\b",
+        lower_text,
+    ))
+    if "waterproof" in lower_text and mandatory_feature:
         hard_constraints["waterproof"] = True
+    if "lightweight" in lower_text and mandatory_feature:
+        hard_constraints["lightweight"] = True
 
     intent = ExtractedIntent(
         shopping_intent=shopping_intent,
@@ -455,6 +558,7 @@ def deterministic_extract_intent(query: str, history: Optional[List[Dict[str, st
         budget_unlimited=budget_unlimited,
         budget_currency=budget_currency,
         is_budget_strict=is_budget_strict,
+        budget_is_approximate=budget_is_approximate,
         hard_constraints=hard_constraints,
         soft_preferences=soft_preferences,
         intended_use=intended_use,
@@ -489,6 +593,21 @@ def deterministic_extract_intent(query: str, history: Optional[List[Dict[str, st
             intent.comparison_product_ids = [
                 product.product_id for product in mentioned_products
             ]
+    if not intent.product_query and shopping_intent != "comparison":
+        intent.product_query = catalog_product_phrase(text) or residual_product_terms(text, intent)
+    intent.continues_previous = bool(
+        history
+        and not intent.product_query
+        and (
+            budget_unlimited
+            or re.search(
+                r"\b(?:actually|now|cheaper|more expensive|only|without|"
+                r"no budget|remove the budget|show more|another|those|that one|"
+                r"size|color|colour)\b",
+                lower_text,
+            )
+        )
+    )
     return normalize_intent_contract(intent, text)
 
 
@@ -504,14 +623,19 @@ def extract_intent_with_llm(query: str, history: Optional[List[Dict[str, str]]] 
                 "Do not guess missing values. Use null for unknown scalar fields and [] or {} for unknown collections. "
                 "purchase_intent must be one of gift, self_use, replacement, comparison, unknown. "
                 "shopping_intent ('product_search'|'gift_buying'|'category_discovery'|'refinement'|'comparison'), "
-                "category (e.g. 'footwear', 'electronics', 'clothing', 'bags_accessories', 'fitness_outdoor'), "
-                "subcategory (e.g. 'laptops', 'running shoes', 'headphones', 'backpacks'), "
+                "product_query (specific product phrase named now, such as 'mascara' or 'trekking poles', or null), "
+                "continues_previous (true only when this message answers/refines the previous request), "
+                "category_hint (inferred category that must not become a hard filter), "
+                "category (only when the user named a product type), "
+                "subcategory (only when the user named a product type, e.g. 'laptops' or 'headphones'), "
                 "budget_min (float or null), budget_max (float or null), budget_currency ('INR'). "
                 "budget_unlimited (bool; true only when the user explicitly removes the budget limit). "
                 "Treat unmarked amounts as INR. Convert explicitly foreign-currency amounts to their INR "
                 "equivalent and always return budget_currency='INR'. "
-                "is_budget_strict (bool), "
-                "hard_constraints (dict of non-negotiable physical attributes like {'waterproof': true, 'noise_cancelling': true, 'ram_gb': 16}. Never put budget, price, or category inside hard_constraints), "
+                "is_budget_strict (bool), budget_is_approximate (bool), "
+                "exclude_sized_items (bool; true only when the user explicitly asks for size-free or "
+                "no-sizing products), "
+                "hard_constraints (only attributes made mandatory with must, only, required, needs to be, at least, or strictly; never put budget, price, or category inside hard_constraints), "
                 "soft_preferences (list of strings), intended_use (string or null), "
                 "recipient (string or null), occasion (string or null), size (string or null), colour (string or null), "
                 "brand (string or null), exclusions (list of strings), deadline (string or null), "
@@ -527,8 +651,8 @@ def extract_intent_with_llm(query: str, history: Optional[List[Dict[str, str]]] 
             for entry in history or []:
                 role = entry.get("role")
                 content = entry.get("content")
-                if role in {"user", "assistant"} and content:
-                    messages.append({"role": role, "content": content[:2000]})
+                if role in {"system", "user", "assistant"} and content:
+                    messages.append({"role": role, "content": content[:500]})
             messages.append({"role": "user", "content": query})
             response = groq_client.chat.completions.create(
                 model=settings.GROQ_MODEL,
@@ -584,7 +708,7 @@ def generate_explanation_template(
             reasons.append(match)
 
     # Build cohesive explanation
-    reason_str = ", ".join(reasons) if reasons else "matches your core criteria well"
+    reason_str = ", ".join(reasons) if reasons else "matches your requested product category"
     brand_title = f"{product.brand} {product.product_name}"
 
     if intent.intended_use and fit_score.use_case_score == 0:
@@ -601,6 +725,35 @@ def generate_explanation_template(
         explanation += f" Note: {unknown_str} is unverified on this listing."
 
     return explanation
+
+
+def validate_explanation(
+    explanation: str,
+    product: Product,
+    intent: ExtractedIntent,
+    fit_score: ProductFitScore,
+) -> bool:
+    """Require a non-budget catalog need and bound verified wording to evidence."""
+    lowered = explanation.casefold()
+    if "verified" in lowered:
+        verified_matches = [
+            match.casefold()
+            for match in fit_score.exact_matches
+            if not match.startswith(("budget_", "category:", "subcategory:"))
+        ]
+        if not any(match in lowered for match in verified_matches):
+            return False
+    non_budget_matches = [
+        match for match in fit_score.exact_matches
+        if not match.startswith(("budget_", "category:", "subcategory:"))
+    ]
+    if non_budget_matches and any(match.casefold() in lowered for match in non_budget_matches):
+        return True
+    category_terms = {
+        token for token in re.findall(r"[a-z0-9]+", product.subcategory or "")
+    }
+    category_terms.update(re.findall(r"[a-z0-9]+", product.category))
+    return bool(category_terms.intersection(re.findall(r"[a-z0-9]+", lowered)))
 
 
 def _page_analysis_template(page_product: PageProductEvidence) -> str:
@@ -715,7 +868,13 @@ def generate_recommendation_narrative(
             for recommendation in recommendations:
                 generated = by_product_id.get(recommendation.product.product_id)
                 if generated:
-                    recommendation.explanation = generated.strip()
+                    if validate_explanation(
+                        generated.strip(),
+                        recommendation.product,
+                        intent,
+                        recommendation.fit_score,
+                    ):
+                        recommendation.explanation = generated.strip()
 
         page_analysis = parsed.get("page_analysis")
         if (

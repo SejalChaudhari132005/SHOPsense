@@ -10,11 +10,13 @@ from typing import Dict, List, Optional, Tuple
 from app.models.product import Product
 from app.models.state import ExtractedIntent, FallbackSuggestion
 from app.services.catalog_service import load_and_validate_catalog, product_matches_subcategory
+from app.services.catalog_service import canonicalize_category
 from app.services.currency_service import (
     convert_currency,
     format_price_in_inr,
 )
 from app.services.retrieval_constraints import evaluate_recommendation_candidate
+from app.core.config import settings
 
 
 class ZeroResultFallbackAgent:
@@ -27,6 +29,24 @@ class ZeroResultFallbackAgent:
         if self._catalog is None:
             self._catalog = load_and_validate_catalog()
         return self._catalog
+
+    @staticmethod
+    def _actions(products: List[Product], requires_approval: bool) -> List[Dict[str, object]]:
+        actions: List[Dict[str, object]] = []
+        if requires_approval:
+            actions.extend([
+                {"type": "fallback_approve", "label": "Use these relaxed requirements", "payload": {}},
+                {"type": "fallback_reject", "label": "Keep my original requirements", "payload": {}},
+            ])
+        actions.extend(
+            {
+                "type": "select_product",
+                "label": product.product_name,
+                "payload": {"product_id": product.product_id},
+            }
+            for product in products[:3]
+        )
+        return actions
 
     @staticmethod
     def _price_inr(product: Product) -> float:
@@ -43,6 +63,7 @@ class ZeroResultFallbackAgent:
             candidate_intent = intent.model_copy(update={"is_budget_strict": False})
 
         comparison_product_ids = set(intent.comparison_product_ids)
+        requested_category = intent.category or intent.category_hint
         candidates = [
             product
             for product in self._get_catalog()
@@ -50,12 +71,19 @@ class ZeroResultFallbackAgent:
                 not comparison_product_ids
                 or product.product_id in comparison_product_ids
             )
+            and (
+                not requested_category
+                or canonicalize_category(product.category)
+                == canonicalize_category(requested_category)
+            )
             if evaluate_recommendation_candidate(
                 product,
                 candidate_intent,
                 allow_related_subcategory=True,
             ).is_eligible
         ]
+        if not requested_category:
+            return []
         if intent.subcategory and intent.subcategory_is_explicit:
             exact = [
                 product
@@ -91,10 +119,24 @@ class ZeroResultFallbackAgent:
         self,
         intent: ExtractedIntent,
         rejection_reasons: Optional[Dict[str, str]] = None,
+        near_misses: Optional[List[Product]] = None,
+        relevance_scores: Optional[Dict[str, float]] = None,
     ) -> FallbackSuggestion:
+        relevance_scores = relevance_scores or {}
+        near_misses = [
+            product for product in (near_misses or [])
+            if relevance_scores.get(product.product_id, 0.0) >= settings.MIN_RELEVANCE
+        ]
+        near_misses.sort(
+            key=lambda product: (
+                -relevance_scores.get(product.product_id, 0.0),
+                self._price_inr(product),
+            )
+        )
         original_constraints = {
             "category": intent.category,
             "subcategory": intent.subcategory,
+            "product_query": intent.product_query,
             "budget_max": intent.budget_max,
             "budget_currency": intent.budget_currency,
             "hard_constraints": intent.hard_constraints,
@@ -108,6 +150,7 @@ class ZeroResultFallbackAgent:
             key: value
             for key, value in {
                 "category": intent.category,
+                "product_query": intent.product_query,
                 "budget_max": intent.budget_max,
                 "budget_currency": intent.budget_currency,
                 "hard_constraints": intent.hard_constraints,
@@ -154,8 +197,8 @@ class ZeroResultFallbackAgent:
                 reason = "No exact result satisfied the complete request."
             else:
                 explanation = (
-                    "Relevant catalog products satisfy the preserved requirements; no unrelated "
-                    "or cross-category products were used."
+                    "These are the few items for this need that remain relevant in the catalog; "
+                    "no unrelated or cross-category products were used."
                 )
                 reason = "The search returned no candidates, but eligible catalog products remain."
 
@@ -181,8 +224,12 @@ class ZeroResultFallbackAgent:
                     else "none"
                 ),
                 requires_user_approval=bool(relaxed),
-                suggested_alternatives=in_budget[:3],
+                suggested_alternatives=(near_misses or in_budget)[:3],
                 explanation=explanation,
+                actions=self._actions(
+                    (near_misses or in_budget)[:3],
+                    bool(relaxed),
+                ),
             )
 
         compatible_without_budget = self._compatible_candidates(intent, keep_budget=False)
@@ -238,13 +285,17 @@ class ZeroResultFallbackAgent:
                 remaining_unmet_requirements=unmet,
                 relaxation_type="budget_increase",
                 requires_user_approval=True,
-                suggested_alternatives=[minimum],
+                suggested_alternatives=(near_misses or [minimum])[:3],
                 explanation=explanation,
+                actions=self._actions(
+                    (near_misses or [minimum])[:3],
+                    True,
+                ),
             )
 
         return FallbackSuggestion(
             fallback_needed=True,
-            result_kind="no_valid_alternatives",
+            result_kind="no_match" if not (intent.category or intent.category_hint) else "no_valid_alternatives",
             reason="No catalog products satisfy the preserved category, feature, and budget requirements.",
             relaxed_constraints={},
             preserved_constraints=preserved_constraints,
@@ -264,4 +315,5 @@ class ZeroResultFallbackAgent:
                 "required features and budget. Those requirements remain unchanged. Tell me "
                 "which requirement, if any, you would like to reconsider."
             ),
+            actions=self._actions([], True),
         )

@@ -1,12 +1,18 @@
 # ShopSense AI — Conversational Shopping Assistant Agent
 
-ShopSense AI is a privacy-first, multi-agent conversational shopping assistant implemented as a Chrome Extension (Manifest V3) backed by a FastAPI backend running a 10-agent LangGraph workflow. It acts like a consultative, knowledgeable in-store associate: understanding natural language queries, enforcing strict constraints, clarifying ambiguous requests, searching across multiple stores, generating grounded explanations, comparing products side-by-side, explaining why rejected products missed the cut, and offering controlled fallback budget relaxations.
+ShopSense AI is a privacy-first shopping assistant implemented as a Chrome Extension (Manifest V3) backed by a FastAPI backend running a 10-agent LangGraph workflow. It acts like a consultative associate: understanding natural-language queries, enforcing strict constraints, clarifying ambiguous requests, searching a local mock catalog, analyzing user-requested product pages, comparing catalog products, explaining trade-offs, and offering controlled fallback budget relaxations.
+
+All mock-catalog prices, extracted budget constraints, comparisons, and product-price displays use INR. Unmarked budget amounts are interpreted as rupees, and explicitly foreign-currency amounts or active-page prices are converted to INR before filtering or display. Currency conversions use a fixed demonstration rate; no USD benchmark is exposed to clients.
 
 ---
 
 ## 🏛️ System Architecture
 
-ShopSense AI pairs a reactive Chrome Extension with a deterministic + LLM-orchestrated backend via LangGraph. Deterministic algorithms enforce hard boundaries (pricing, category bounds, memory scrubbing, URL validation), while Groq LLM intelligence handles natural language intent parsing, ambiguity resolution, and conversational explanations.
+ShopSense AI pairs a reactive Chrome Extension with a LangGraph backend. Groq is used for structured intent extraction and, when configured, one batched narrative call for the top recommendations and requested page analysis. Catalog retrieval, hard-constraint enforcement, fit scoring, clarification decisions, and fallback eligibility remain deterministic. Without a configured Groq key, narratives use evidence-based templates. The backend uses only the local mock database; it has no Amazon or Flipkart search integrations.
+
+The intent extractor validates Groq output against a Pydantic contract that separates purchase purpose, explicit constraints, and evidence-linked inferred preferences. Unknown values remain empty; health-related wording (for example, “bad knees”) can become a tentative ranking preference, never a hard filter. Clarification then checks query completeness and category-specific requirements (such as recipient sizing for gift footwear or clothing) before catalog mapping and hybrid retrieval. A deterministic parser remains available when Groq is unavailable or returns invalid output.
+
+Explicit product types in the query are checked against the catalog taxonomy before retrieval. When a comparison names two catalog products, those products are pinned as the comparison candidates; missing budgets do not trigger unnecessary clarification, and a later budget limit cannot substitute unrelated products.
 
 ```
 +---------------------------------------------------------------------------------------------------+
@@ -76,15 +82,31 @@ ShopSense AI pairs a reactive Chrome Extension with a deterministic + LLM-orches
 | # | Agent Name | File Location | Primary Responsibility | Execution Type |
 |---|------------|---------------|------------------------|----------------|
 | **1** | **Query Ingestion Agent** | `backend/app/agents/query_ingestion.py` | Normalizes user prompts, incorporates active browser tab context (scraped DOM), and tracks session turns. | Deterministic |
-| **2** | **Intent & Constraint Extraction Agent** | `backend/app/agents/intent_extraction.py` | Extracts structured parameters: category, budget bounds, hard specifications, color, brand, recipient. | LLM (Groq) + Rule Fallback |
-| **3** | **Ambiguity & Clarification Agent** | `backend/app/agents/ambiguity_clarification.py` | Identifies missing criteria, contradictions ("vegan leather"), and generates targeted single questions with reply chips. | LLM / Rule Hybrid |
+| **2** | **Intent & Constraint Extraction Agent** | `backend/app/agents/intent_extraction.py` | Extracts purchase purpose, explicit constraints, evidence-linked tentative preferences, category, budget, color, brand, and recipient. | LLM (Groq) + Rule Fallback |
+| **3** | **Ambiguity & Clarification Agent** | `backend/app/agents/ambiguity_clarification.py` | Scores search readiness, checks category-specific requirements and contradictions, and generates one targeted follow-up question. | Deterministic Rules |
 | **4** | **Catalog Attribute Mapping Agent** | `backend/app/agents/catalog_mapping.py` | Maps conversational terms and synonyms to catalog taxonomy and filters. | Deterministic Synonyms |
-| **5** | **Candidate Retrieval Agent** | `backend/app/agents/candidate_retrieval.py` | Executes federated search across local catalog and multi-store adapters (Amazon IN, Flipkart, Mock). | Multi-Source Async |
+| **5** | **Candidate Retrieval Agent** | `backend/app/agents/candidate_retrieval.py` | Uses hybrid BM25 + sentence-embedding retrieval over the local mock catalog. | Hybrid + Local Catalog |
 | **6** | **Ranking & Fit Scoring Agent** | `backend/app/agents/ranking_scoring.py` | Calculates transparent fit scores (0–100) combining budget fit, feature satisfaction, and user preferences. | Deterministic Math |
-| **7** | **Explanation Generation Agent** | `backend/app/agents/explanation_generation.py` | Synthesizes grounded, persuasive rationales highlighting matched features and calling out unverified data. | LLM (Groq) |
+| **7** | **Explanation Generation Agent** | `backend/app/agents/explanation_generation.py` | Makes one batched Groq call for recommendation explanations and optional active-page analysis; falls back to evidence-based templates. | Groq + Deterministic Fallback |
 | **8** | **Zero-Result & Fallback Agent** | `backend/app/agents/zero_result_fallback.py` | Recovers from over-constrained queries by generating a structured Budget-Relaxation Diff View. | Deterministic Rules |
 | **9** | **Session Memory Agent** | `backend/app/agents/session_memory.py` | Manages active conversational context, isolates topic changes, and syncs durable preferences to SQLite. | In-Memory + SQLite |
 | **10** | **Orchestrator Agent** | `backend/app/agents/graph_orchestrator.py` | LangGraph StateGraph engine coordinating conditional transitions, confidence gating, and state recovery. | State Machine |
+
+---
+
+## 🔎 Conversational Catalog Retrieval
+
+Chat retrieval combines BM25 keyword ranking with ONNX Runtime embeddings generated by FastEmbed and searched through FAISS, then fuses the result lists with reciprocal rank fusion (RRF). It uses the supported `sentence-transformers/all-MiniLM-L6-v2` model without importing PyTorch. Hybrid results are primary: exact catalog-name lookup is only used when hybrid search has no eligible results or its best normalized RRF score is below 60. Explicit hard constraints are applied before retrieval and verified again on local catalog results; fit scoring remains the primary recommendation rank, with retrieval relevance used as a tie-breaker. The local mock catalog is the only backend product source.
+
+When a user asks to analyze the active product page, the extension sends its extracted title, price, attributes, and specifications as page evidence. The backend preserves those fields separately from shopping constraints and supplies them to the batched narrative call. Captured page details are treated as unverified evidence, not as independently validated catalog facts.
+
+The ONNX model and FAISS index load lazily. The local index is fingerprinted by embedding backend, model, and catalog, then cached under `backend/data/hybrid_index`; when semantic dependencies, model loading, or model downloads are unavailable, the service logs the failure and continues with BM25. Run the chat retrieval benchmark from the backend directory with:
+
+```powershell
+.\.venv\Scripts\python.exe -m app.evaluation.retrieval_benchmark
+```
+
+The benchmark compares the legacy lexical baseline, BM25, semantic retrieval, and RRF using catalog-grounded cases. Its output reports semantic availability and constraint-violation rates; do not treat results as evidence of semantic quality unless the ONNX semantic backend loaded successfully.
 
 ---
 
@@ -142,25 +164,26 @@ ShopSense AI pairs a reactive Chrome Extension with a deterministic + LLM-orches
 
 ## 📊 Empirical Evaluation Benchmark Results
 
-The system was evaluated using an automated benchmark suite (`backend/app/evaluation/benchmark_runner.py`) consisting of 17 diverse shopping queries (clear queries with strict budgets, ambiguous requests, conflicting constraints, zero-result scenarios, multi-turn follow-ups, and topic switches).
+The system was evaluated using an automated benchmark suite (`backend/app/evaluation/benchmark_runner.py`) consisting of 17 diverse shopping queries (clear queries with strict budgets, ambiguous requests, conflicting constraints, zero-result scenarios, multi-turn follow-ups, and topic switches). This run used the deterministic LLM fallback and successfully initialized the local ONNX model. It warms the ONNX model and local index before timing requests, and reports warmup duration and semantic-backend availability separately from steady-state request latency.
 
 All figures below are **actual empirical measurements** executed on the running system:
 
 | Metric | Measured Value | Target Threshold | Status |
 |:-------|:--------------:|:----------------:|:------:|
 | **Hard-Constraint Satisfaction Rate** | **100.0%** (0 violations) | 100.0% | **PASSED** |
-| **Ranking Quality (Top-1 Match)** | **80.0%** | >= 70.0% | **PASSED** |
-| **Ranking Quality (NDCG@3 Score)** | **90.0%** | >= 80.0% | **PASSED** |
+| **Ranking Quality (Top-1 Match)** | **100.0%** | >= 70.0% | **PASSED** |
+| **Ranking Quality (NDCG@3 Score)** | **100.0%** | >= 80.0% | **PASSED** |
 | **Clarification Precision** | **100.0%** | >= 85.0% | **PASSED** |
 | **Clarification Recall** | **100.0%** | >= 85.0% | **PASSED** |
 | **Clarification Usefulness** | **100.0%** | >= 85.0% | **PASSED** |
 | **Fallback Success Rate** | **100.0%** | 100.0% | **PASSED** |
 | **Session-Memory Accuracy** | **100.0%** | >= 95.0% | **PASSED** |
 | **Product-Data Completeness** | **100.0%** | >= 90.0% | **PASSED** |
-| **End-to-End Latency (Min)** | **3.6 ms** | < 100 ms | **PASSED** |
-| **End-to-End Latency (Mean)** | **23.6 ms** | < 250 ms | **PASSED** |
-| **End-to-End Latency (P95)** | **49.8 ms** | < 500 ms | **PASSED** |
-| **End-to-End Latency (Max)** | **49.8 ms** | < 1000 ms | **PASSED** |
+| **ONNX Model + Index Warmup** | **1,137.7 ms** | Reported separately | **MEASURED** |
+| **Steady-State End-to-End Latency (Min)** | **9.9 ms** | < 100 ms | **PASSED** |
+| **Steady-State End-to-End Latency (Mean)** | **58.2 ms** | < 250 ms | **PASSED** |
+| **Steady-State End-to-End Latency (P95)** | **155.1 ms** | < 500 ms | **PASSED** |
+| **Steady-State End-to-End Latency (Max)** | **155.1 ms** | < 1000 ms | **PASSED** |
 
 > **Automated Verification**: Run `python -m pytest backend/tests/test_evaluation_benchmark.py -v` to re-execute and verify these benchmarks at any time.
 
@@ -188,13 +211,13 @@ A comprehensive security review was performed across the codebase:
    - Cross-session preferences require affirmative user consent and are scoped to `user_id`.
    - Temporary constraints (recipients, occasions, deadlines) are scrubbed and never written to durable SQLite storage.
    - Deletion endpoint (`DELETE /api/preferences/`) permanently purges stored profiles ("Right to be Forgotten").
-7. **Safe External Source Failures**:
-   - Multi-store adapter requests have 5-second timeouts and rate limiting.
-   - Timeouts and failures in individual stores (e.g. Amazon IN or Flipkart) degrade gracefully: the user receives results from available sources with an informative status banner without backend crashes.
+7. **Mock Catalog Provenance**:
+   - Product recommendations come exclusively from the local demonstration catalog.
+   - Extension page parsers only extract information from the product page the user is viewing; they do not search retailer marketplaces.
 
 ### Documented Remaining Risks & Limitations
 - **DOM Fragility**: E-commerce stores frequently change DOM classes and selectors. The fallback mechanisms record missing fields honestly, but regular selector updates are required for live page extraction.
-- **Marketplace Bot Defenses**: Direct scraping of production marketplaces like Amazon India or Flipkart from cloud IPs can encounter CAPTCHAs. Commercial deployment requires official Partner APIs (Amazon Creators/Product Advertising API, Flipkart Affiliate API).
+- **Mock Data**: Catalog prices, stock, and product records are demonstration data and are not live retailer listings.
 
 ---
 
@@ -236,12 +259,10 @@ Shopsense/
 │   │   │   ├── zero_result_fallback.py # Agent 8: Budget & spec relaxation diff view
 │   │   │   ├── session_memory.py       # Agent 9: Conversational & durable memory
 │   │   │   └── graph_orchestrator.py   # Agent 10: LangGraph StateGraph engine
-│   │   ├── adapters/                   # Multi-Store Adapters
-│   │   │   ├── base.py                 # Abstract BaseStoreAdapter
-│   │   │   ├── amazon_in.py            # Amazon India adapter
-│   │   │   ├── flipkart.py             # Flipkart adapter
-│   │   │   ├── mock_store.py           # Mock multi-store adapter
-│   │   │   └── registry.py             # StoreRegistry & federated query router
+│   │   ├── adapters/                   # Local mock catalog adapter and registry
+│   │   │   ├── base.py                 # Adapter contract and store status models
+│   │   │   ├── local_catalog_adapter.py # Local mock database adapter
+│   │   │   └── registry.py             # Local catalog search coordinator
 │   │   ├── catalog/                    # Curated product catalog & schema
 │   │   │   ├── demo_catalog.json       # 15+ normalized products with verified specs
 │   │   │   └── manager.py              # Catalog querying & filtering service
@@ -260,7 +281,7 @@ Shopsense/
 │       ├── test_advanced_features.py        # Tests for all 6 advanced features
 │       ├── test_agents.py                   # Unit tests for individual agents
 │       ├── test_workflow.py                 # LangGraph end-to-end integration tests
-│       ├── test_multi_store_retrieval.py    # Store adapter federation tests
+│       ├── test_multi_store_retrieval.py    # Local catalog search and adapter resilience tests
 │       └── test_store_adapters.py           # Adapter timeout & normalization tests
 └── extension/                          # Chrome Extension Manifest V3
     ├── manifest.json                   # MV3 configuration (Side Panel + Storage)
@@ -312,23 +333,24 @@ notepad .env
 ```powershell
 cd "c:\Users\Sejal Pc\Desktop\Shopsense\backend"
 
-# Create Python virtual environment if not already present
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+# Create the backend virtual environment if it does not exist
+if (-not (Test-Path .\.venv\Scripts\python.exe)) { python -m venv .venv }
 
-# Install dependencies
-pip install -r requirements.txt
+# Use the backend interpreter explicitly so another activated environment is not used
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 
-# Run the complete verification test suite (102 tests)
-python -m pytest tests -v
+# Run the complete verification test suite (125 tests)
+.\.venv\Scripts\python.exe -m pytest tests -v
 
 # Run the quantitative benchmark evaluation directly
-python -m app.evaluation.benchmark_runner
+.\.venv\Scripts\python.exe -m app.evaluation.benchmark_runner
 
 # Start the FastAPI backend server
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 *The FastAPI documentation is accessible at `http://127.0.0.1:8000/docs`.*
+
+Each chat request prints `[Workflow]` and `[Agent NN/10]` start/completion lines in this same terminal. Logs include extracted intent and constraints, clarification decisions and questions, catalog mappings, candidate and ranking summaries, fallback details, and final recommendation names, prices, scores, and explanations. The original user message is not logged verbatim.
 
 ### Step 3: Set Up Chrome Extension & Build Production Bundle
 
@@ -370,12 +392,12 @@ Follow this script to demonstrate all features of ShopSense AI sequentially:
 
 Scenario 1: Natural-Language Query with Hard Budget Constraint
 - Action: Open the extension side panel and type:
-  "Find lightweight waterproof running shoes under $150"
+  "Find lightweight waterproof running shoes under ₹12,500"
 - Expected Behavior:
-  1. The system extracts intent: Category="footwear", Budget Max=$150, Features=["lightweight", "waterproof"].
+  1. The system extracts intent: Category="footwear", Budget Max=₹12,500, Features=["lightweight", "waterproof"].
   2. The confidence gate evaluates the query as sufficiently clear.
-  3. Retrieval agent retrieves catalog items and filters out any item above $150.
-  4. ProductCard renders top recommendation: "AeroGlide Ultralight Trail Runner" ($139.99).
+  3. Retrieval agent retrieves catalog items and filters out any item above ₹12,500.
+  4. ProductCard renders a catalog recommendation such as "TerraStride GORE-TEX Trail Running Shoes" (₹9,999.17).
   5. Fit breakdown shows 95% fit score, highlighting waterproof lining and lightweight specs.
   6. Transparent provenance displays "Verified Demo Data".
 
@@ -397,11 +419,11 @@ Scenario 3: Contradictory Request Gated Before Retrieval
 
 Scenario 4: Multi-Turn Constraint Refinement (Budget Reduction)
 - Action: Following up on Scenario 1, type:
-  "Actually, my budget is only $120"
+  "Actually, my budget is only ₹8,500"
 - Expected Behavior:
-  1. Session Memory Agent retains prior context ("lightweight waterproof running shoes") while updating Budget Max to $120.
-  2. The $139.99 AeroGlide shoe is immediately excluded.
-  3. The catalog recommends qualifying items under $120.
+  1. Session Memory Agent retains prior context ("lightweight waterproof running shoes") while updating Budget Max to ₹8,500.
+  2. The ₹9,999.17 TerraStride shoe is immediately excluded.
+  3. The catalog recommends qualifying items under ₹8,500.
 
 Scenario 5: Side-by-Side 3-Product Comparison
 - Action: Click the "Compare" checkbox on 2 or 3 recommended items, then click "Compare Selected (3)" in the top header.
@@ -413,8 +435,8 @@ Scenario 6: Demonstrating "Why Not?" Mode
 - Action: Click the "Why Not?" button on an excluded candidate or a runner-up item.
 - Expected Behavior:
   1. Why Not Modal opens.
-  2. Correctly flags reason (e.g. Status: "excluded", Violated Hard Constraint: "Price $139.99 exceeds your budget of $120.00").
-  3. Accurately provides "What would need to change for it to become eligible": "Increase your budget ceiling to at least $139.99".
+  2. Correctly flags reason (e.g. Status: "excluded", Violated Hard Constraint: "Price ₹9,999.17 exceeds your budget of ₹8,500.00").
+  3. Accurately provides "What would need to change for it to become eligible": "Increase your budget ceiling to at least ₹9,999.17".
   4. Features a side-by-side comparison with the recommended alternative.
 
 Scenario 7: Zero-Result Fallback & Budget-Relaxation Diff View

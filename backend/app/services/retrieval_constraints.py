@@ -6,6 +6,7 @@ from typing import Any, Iterable, List, Optional, Set, Tuple
 
 from app.models.product import Product
 from app.models.state import ExtractedIntent
+from app.core.config import settings
 from app.services.catalog_service import (
     CATEGORY_SYNONYMS,
     canonicalize_category,
@@ -20,6 +21,20 @@ class ConstraintEvaluation:
     is_eligible: bool
     violations: Tuple[str, ...]
     unknown_attributes: Tuple[str, ...]
+
+
+def budget_ceiling_inr(intent: ExtractedIntent) -> Optional[float]:
+    """Return the shared INR ceiling used for approximate and strict budgets."""
+    if intent.budget_max is None:
+        return None
+    maximum = convert_currency(
+        intent.budget_max,
+        intent.budget_currency,
+        "INR",
+    )
+    if intent.budget_is_approximate:
+        return round(maximum * (1.0 + settings.BUDGET_APPROX_TOLERANCE), 2)
+    return maximum
 
 
 _FALLBACK_SUBCATEGORY_GROUPS = (
@@ -43,7 +58,7 @@ def _normalize_key(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", value.strip().lower()).strip("_")
 
 
-def _product_text(product: Product) -> str:
+def _catalog_evidence_text(product: Product) -> str:
     values: List[str] = [
         product.product_name,
         product.brand,
@@ -52,8 +67,6 @@ def _product_text(product: Product) -> str:
         product.description,
         *product.tags,
         *product.use_cases,
-        *product.good_for,
-        *product.review_snippets,
         *(product.colours or []),
         *(product.sizes or []),
     ]
@@ -61,6 +74,37 @@ def _product_text(product: Product) -> str:
         for key, value in collection.items():
             values.extend((str(key), str(value)))
     return " ".join(values).casefold()
+
+
+def _product_exclusion_text(product: Product) -> str:
+    values = [
+        product.product_name,
+        product.brand,
+        product.category,
+        product.subcategory or "",
+        product.description,
+        *product.tags,
+        *product.use_cases,
+        *(product.colours or []),
+        *(product.sizes or []),
+    ]
+    for collection in (product.attributes, product.specifications):
+        values.extend(
+            f"{key} {value}" for key, value in collection.items()
+        )
+    return " ".join(values).casefold()
+
+
+def _audience_text(product: Product) -> str:
+    return " ".join([
+        product.product_name,
+        product.brand,
+        product.category,
+        product.subcategory or "",
+        product.description,
+        *product.tags,
+        *product.use_cases,
+    ]).casefold()
 
 
 def _normalize_taxonomy_value(value: str) -> str:
@@ -84,30 +128,67 @@ def fallback_subcategories_compatible(
     )
 
 
-def _feature_is_verified(product: Product, feature: str) -> bool:
+def _feature_is_verified(product: Product, feature: str) -> Optional[bool]:
+    return resolve_verified_feature(product, feature)
+
+
+def resolve_verified_feature(product: Product, feature: str) -> Optional[bool]:
+    """Resolve a feature using structured evidence and explicit catalog tags."""
+    normalized = _normalize_key(feature)
+    if normalized == "lightweight":
+        actual = resolve_hard_value(product, "lightweight")
+        if isinstance(actual, bool):
+            return actual
+        evidence = _catalog_evidence_text(product)
+        if re.search(r"\b(?:lightweight|ultralight|featherweight)\b", evidence):
+            return True
+        return None
+
     actual = resolve_hard_value(product, feature)
-    if _normalize_key(feature) == "lightweight":
-        weight = resolve_hard_value(product, "weight_kg")
-        if isinstance(weight, (int, float)) and not isinstance(weight, bool):
-            return weight <= 1.5
     if isinstance(actual, bool):
         return actual
     if actual is not None and str(actual).strip().casefold() in {"false", "no", "0"}:
         return False
+    if actual is not None and str(actual).strip().casefold() in {"true", "yes", "1"}:
+        return True
 
-    product_text = _product_text(product)
-    synonyms = match_synonyms(feature)
-    if _normalize_key(feature) == "waterproof":
+    if normalized == "waterproof":
+        waterproof_level = resolve_feature_strength(product, "waterproof")
+        return True if waterproof_level == 2 else False if waterproof_level == 1 else None
+
+    product_text = _catalog_evidence_text(product)
+    synonyms = list(match_synonyms(feature))
+    synonyms.extend([
+        feature.replace("_", " "),
+        normalized.replace("_", " "),
+    ])
+    if normalized == "waterproof":
         synonyms = [
-            synonym
-            for synonym in synonyms
+            synonym for synonym in synonyms
             if synonym.casefold() not in {"water-resistant", "water resistant"}
         ]
-    return any(
-        synonym.casefold() in product_text
-        for synonym in synonyms
-        if synonym.strip()
-    )
+    if any(synonym.casefold() in product_text for synonym in synonyms if synonym.strip()):
+        return True
+    return None
+
+
+def resolve_feature_strength(product: Product, feature: str) -> Optional[int]:
+    """Return evidence strength: 2 for exact waterproof, 1 for water-resistant."""
+    normalized = _normalize_key(feature)
+    if normalized not in {"waterproof", "water_resistant"}:
+        return 2 if resolve_verified_feature(product, feature) is True else None
+    actual = resolve_hard_value(product, "waterproof")
+    if actual is True:
+        return 2
+    actual_resistant = resolve_hard_value(product, "water_resistant")
+    if actual_resistant is True:
+        return 1
+    evidence = _catalog_evidence_text(product)
+    if re.search(r"\b(?:gore[\s-]?tex|waterproof|rainproof|weatherproof|ipx[78])\b", evidence):
+        return 2
+    if re.search(r"\bwater[\s-]?resistant\b", evidence):
+        return 1
+    return None
 
 
 def evaluate_recommendation_candidate(
@@ -150,13 +231,6 @@ def evaluate_recommendation_candidate(
     )
     violations.extend(base_evaluation.violations)
     unknown.extend(base_evaluation.unknown_attributes)
-    if intent.subcategory and intent.subcategory_is_explicit:
-        for feature in intent.feature_preferences:
-            if not _feature_is_verified(product, feature):
-                violations.append(
-                    f"Required feature '{feature}' is not verified on the product."
-                )
-
     if intent.subcategory and intent.subcategory_is_explicit:
         if not product_matches_subcategory(product.subcategory, intent.subcategory):
             if not (
@@ -222,7 +296,8 @@ def evaluate_hard_constraints(
     violations: List[str] = []
     unknown: List[str] = []
     excluded_ids = set(excluded_product_ids or ())
-    product_text = _product_text(product)
+    product_text = _product_exclusion_text(product)
+    audience_text = _audience_text(product)
 
     # Recipient gender signals are only used when both sides contain explicit
     # evidence. Missing recipient/product metadata remains eligible.
@@ -233,10 +308,10 @@ def evaluate_hard_constraints(
         "men", "males", "boyfriend", "husband", "father", "dad", "son", "brother",
     }
     male_only_listing = bool(
-        re.search(r"\b(?:men|men's|mens|male)\b", product_text)
+        re.search(r"\b(?:men|men's|mens|male)\b", audience_text)
     )
     female_only_listing = bool(
-        re.search(r"\b(?:women|women's|womens|female)\b", product_text)
+        re.search(r"\b(?:women|women's|womens|female)\b", audience_text)
     )
     if female_recipient and male_only_listing:
         violations.append(
@@ -283,9 +358,12 @@ def evaluate_hard_constraints(
         minimum_inr = convert_currency(intent.budget_min, intent.budget_currency, "INR")
         if product_price_inr < minimum_inr:
             violations.append("Price is below the requested minimum.")
-    if intent.is_budget_strict and intent.budget_max is not None:
-        maximum_inr = convert_currency(intent.budget_max, intent.budget_currency, "INR")
-        if product_price_inr > maximum_inr:
+    if (
+        intent.budget_max is not None
+        and (intent.is_budget_strict or intent.budget_is_approximate)
+    ):
+        maximum_inr = budget_ceiling_inr(intent)
+        if maximum_inr is not None and product_price_inr > maximum_inr:
             violations.append("Price exceeds the strict budget ceiling.")
 
     for exclusion in intent.exclusions:
@@ -309,16 +387,18 @@ def evaluate_hard_constraints(
         normalized_key = _normalize_key(key)
         if normalized_key in ignored_keys:
             continue
-        actual = resolve_hard_value(product, key)
+        actual = (
+            resolve_verified_feature(product, key)
+            if isinstance(expected, bool)
+            else resolve_hard_value(product, key)
+        )
         if actual is None:
             unknown.append(key)
-            violations.append(f"Required attribute '{key}' is not verified.")
             continue
         if isinstance(expected, bool):
             actual_bool = _as_bool(actual)
             if actual_bool is None:
                 unknown.append(key)
-                violations.append(f"Required attribute '{key}' is not verifiable.")
             elif actual_bool != expected:
                 violations.append(f"Hard constraint failed: '{key}' is {actual}.")
         elif isinstance(expected, (int, float)) and not isinstance(expected, bool):

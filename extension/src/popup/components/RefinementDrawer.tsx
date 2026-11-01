@@ -51,6 +51,7 @@ export const RefinementDrawer: React.FC<RefinementDrawerProps> = ({
 
     if (budgetMax !== '') {
       payload.new_budget_max = Number(budgetMax);
+      payload.new_budget_currency = 'INR';
     }
     if (colour.trim()) {
       payload.new_colour = colour.trim();
@@ -90,30 +91,30 @@ export const RefinementDrawer: React.FC<RefinementDrawerProps> = ({
             {/* Budget Adjustment */}
             <div className="form-group">
               <label htmlFor="refine-budget" className="form-label">
-                Maximum Budget (USD)
+                Maximum Budget (INR)
               </label>
               <div className="input-prefix-wrapper">
-                <span className="input-prefix">$</span>
+                <span className="input-prefix">₹</span>
                 <input
                   id="refine-budget"
                   type="number"
                   min="0"
                   step="10"
                   className="form-input prefix-padding"
-                  placeholder="e.g. 500"
+                  placeholder="e.g. 50,000"
                   value={budgetMax}
                   onChange={(e) => setBudgetMax(e.target.value === '' ? '' : Number(e.target.value))}
                 />
               </div>
               <div className="quick-budget-chips">
-                {[150, 300, 500, 1000, 1500].map((amt) => (
+                {[15000, 30000, 50000, 100000, 150000].map((amt) => (
                   <button
                     key={amt}
                     type="button"
                     className={`chip-btn ${budgetMax === amt ? 'active' : ''}`}
                     onClick={() => setBudgetMax(amt)}
                   >
-                    Under ${amt}
+                    Under ₹{amt.toLocaleString('en-IN')}
                   </button>
                 ))}
               </div>

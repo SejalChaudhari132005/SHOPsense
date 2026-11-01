@@ -9,8 +9,10 @@ from app.core.config import settings
 from app.models.product import Product
 from app.models.state import ExtractedIntent, AttributeMappingResult, CandidateRetrievalResult
 from app.services.catalog_service import (
+    canonicalize_category,
     find_catalog_product_by_name,
     load_and_validate_catalog,
+    product_matches_subcategory,
 )
 from app.services.hybrid_retrieval import get_hybrid_catalog_index, cosine_to_relevance
 from app.services.retrieval_constraints import evaluate_hard_constraints
@@ -75,7 +77,7 @@ class CandidateRetrievalAgent:
             value.strip() for value in slots
             if isinstance(value, str) and value.strip()
         ))
-        return " ".join(values) or (query_text or "").strip()
+        return " ".join(values)
 
     def retrieve(
         self,
@@ -153,6 +155,22 @@ class CandidateRetrievalAgent:
                 semantic_relevance,
                 coverage,
             ) if semantic_scores else 0.8 * coverage
+            if (
+                intent.category
+                and intent.category_is_explicit
+                and canonicalize_category(product.category)
+                == canonicalize_category(intent.category)
+            ):
+                relevance = max(relevance, 0.55)
+                if (
+                    intent.subcategory
+                    and intent.subcategory_is_explicit
+                    and product_matches_subcategory(
+                        product.subcategory,
+                        intent.subcategory,
+                    )
+                ):
+                    relevance = max(relevance, 0.65)
             # Compatibility for older injected test doubles; production
             # indexes always provide semantic/corpus signals.
             if not semantic_scores and not bm25_coverage:
@@ -255,8 +273,10 @@ class CandidateRetrievalAgent:
         for product in eligible_candidates:
             product_id = product.product_id
             retrieval_scores[product_id] = float(
-                0.0 if exact_fallback_used else relevance_scores.get(product_id, 0.0)
+                1.0 if exact_fallback_used else relevance_scores.get(product_id, 0.0)
             )
+            if exact_fallback_used:
+                relevance_scores[product_id] = 1.0
             sources = (
                 ["exact_fallback"]
                 if exact_fallback_used

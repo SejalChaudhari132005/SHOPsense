@@ -1,6 +1,7 @@
 import React from 'react';
 import { Sparkles, Plus, ShieldCheck } from 'lucide-react';
 import { ComplementarySuggestion } from '../../types';
+import { formatPriceInINR } from '../../services/currency';
 
 interface ComplementaryCardProps {
   suggestion: ComplementarySuggestion;
@@ -18,7 +19,9 @@ export const ComplementaryCard: React.FC<ComplementaryCardProps> = ({ suggestion
 
   const productName = product?.product_name || (suggestion as any).suggested_product_name || 'Complementary Accessory';
   const category = product?.category || (suggestion as any).category || 'Accessory';
-  const displayPrice = price_formatted || (product ? `$${product.price}` : '');
+  const displayPrice = product
+    ? formatPriceInINR(product.price, product.currency)
+    : price_formatted || '';
   const explanation = why_relevant || utility_explanation || 'Pairs well with your selected item.';
   const parentName = (suggestion as any).parent_product_name || 'your items';
 
@@ -31,7 +34,7 @@ export const ComplementaryCard: React.FC<ComplementaryCardProps> = ({ suggestion
           <span className="comp-parent-tag">Pairs with {parentName.slice(0, 24)}...</span>
         </div>
         <span className="provenance-pill" title="Catalog source attribution">
-          <ShieldCheck size={10} /> {data_provenance || 'Verified Demo Data'}
+          <ShieldCheck size={10} /> {data_provenance || 'Demo sample data'}
         </span>
       </div>
 

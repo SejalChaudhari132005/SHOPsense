@@ -32,10 +32,15 @@ htmlcov/
 .ruff_cache/
 
 # Databases & Persistence
+data/
+backend/data/
 *.db
 *.sqlite
 *.sqlite3
-backend/data/*.db
+
+# Logs & Local Reports
+*.log
+*.out
 
 # Node & Frontend
 node_modules/

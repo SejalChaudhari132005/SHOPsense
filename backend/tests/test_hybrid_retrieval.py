@@ -353,13 +353,13 @@ def test_hard_constraints_cover_category_budget_stock_and_exclusions():
     ).is_eligible
 
 
-def test_unknown_mandatory_attributes_are_not_treated_as_matches():
+def test_unknown_mandatory_attributes_remain_eligible_but_unverified():
     product = _product("item-1", "Outdoor Product")
     intent = ExtractedIntent(hard_constraints={"waterproof": True})
 
     result = evaluate_hard_constraints(product, intent)
 
-    assert not result.is_eligible
+    assert result.is_eligible
     assert "waterproof" in result.unknown_attributes
 
 

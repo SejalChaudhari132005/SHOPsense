@@ -10,6 +10,7 @@ import {
   Compass
 } from 'lucide-react';
 import { PageContext, ExtractedProduct } from '../../types';
+import { formatPriceInINR } from '../../services/currency';
 
 interface CurrentProductBannerProps {
   pageContext: PageContext | null;
@@ -67,13 +68,11 @@ export const CurrentProductBanner: React.FC<CurrentProductBannerProps> = ({
 
   const product = pageContext.extractedProduct;
 
-  const formatPrice = (price: number | null, currency: string | null, raw: string | null) => {
+  const formatPrice = (price: number | null, currency: string | null) => {
     if (price !== null) {
-      const symbols: Record<string, string> = { USD: '$', INR: '₹', EUR: '€', GBP: '£' };
-      const sym = symbols[(currency || 'USD').toUpperCase()] || (currency || '') + ' ';
-      return `${sym}${price.toLocaleString()}`;
+      return formatPriceInINR(price, currency);
     }
-    return raw || 'Not available';
+    return 'Price unavailable';
   };
 
   return (
@@ -135,7 +134,7 @@ export const CurrentProductBanner: React.FC<CurrentProductBannerProps> = ({
           </h2>
           <div className="banner-price-row">
             <span className="banner-price">
-              {formatPrice(product.price, product.currency, product.raw_price)}
+              {formatPrice(product.price, product.currency)}
             </span>
             <span className="banner-availability">
               {product.availability || 'In stock'}

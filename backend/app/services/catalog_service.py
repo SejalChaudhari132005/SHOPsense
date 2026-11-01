@@ -49,6 +49,16 @@ FEATURE_SYNONYMS: Dict[str, List[str]] = {
     "running": ["jogging", "marathon", "trail running", "road running", "runner"],
 }
 
+SUBCATEGORY_SYNONYMS: Dict[str, List[str]] = {
+    "trail_running": ["trail shoes", "trail running shoes"],
+    "road_running": ["road running shoes", "road shoes"],
+    "running_shoes": ["running shoes"],
+    "hiking_boots": ["hiking boots", "hiking shoes"],
+    "travel_backpacks": ["travel backpack"],
+    "hiking_backpacks": ["hiking backpack"],
+    "commuter_backpacks": ["commuter backpack"],
+}
+
 # Color normalization table
 COLOR_MAP: Dict[str, str] = {
     "black": "black",
@@ -190,6 +200,10 @@ def product_matches_subcategory(
     subcategory_groups = {
         "laptop": {"laptops"},
         "notebook": {"laptops"},
+        "trail_shoe": {"trail_running"},
+        "trail_shoes": {"trail_running"},
+        "hiking_shoe": {"hiking_boots", "trail_running"},
+        "hiking_shoes": {"hiking_boots", "trail_running"},
         "audio": {"headphones", "earbuds"},
         "backpack": {"commuter_backpacks", "hiking_backpacks", "travel_backpacks"},
         "running_shoe": {
@@ -203,6 +217,7 @@ def product_matches_subcategory(
             "trail_running",
         },
         "hiking_boot": {"hiking_boots"},
+        "hiking_boots": {"hiking_boots"},
         "dress": {"dresses", "womens_dresses", "tops"},
         "dresses": {"dresses", "womens_dresses", "tops"},
         "womens_dresses": {"dresses", "womens_dresses", "tops"},

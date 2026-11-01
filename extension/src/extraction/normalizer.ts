@@ -92,7 +92,7 @@ export function parsePriceAndCurrency(rawPriceText: string | null | undefined): 
 
   return {
     numericPrice: Math.round(parsed * 100) / 100,
-    currency: detectedCurrency || 'USD',
+    currency: detectedCurrency || 'INR',
     rawText: raw,
   };
 }

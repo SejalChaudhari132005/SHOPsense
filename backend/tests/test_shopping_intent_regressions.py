@@ -17,6 +17,7 @@ from app.services.retrieval_constraints import (
     evaluate_hard_constraints,
     evaluate_recommendation_candidate,
 )
+from app.services.catalog_service import load_and_validate_catalog
 
 
 def _extract(query, previous=None):
@@ -218,6 +219,156 @@ def test_parser_extracts_budget_ranges_and_minimums_in_inr():
     assert ranged.budget_currency == "INR"
     assert minimum.budget_min == 10000
     assert minimum.budget_max is None
+
+
+def test_multiturn_laptop_clarification_preserves_identity_and_budget():
+    workflow = ShopSenseWorkflow()
+    session_id = "multiturn-laptop-context-regression"
+    with patch(
+        "app.agents.intent_extraction.extract_intent_with_llm",
+        side_effect=lambda text, history: deterministic_extract_intent(text, history),
+    ):
+        first = workflow.execute_turn(session_id, "Suggest a good laptop for me.")
+        second = workflow.execute_turn(
+            session_id,
+            "I am a computer engineering student. I need it for programming, data science and everyday college work.",
+        )
+        final = workflow.execute_turn(session_id, "The budget is INR 80,000.")
+
+    intent = workflow.session_memory_agent.get_or_create_session(
+        session_id
+    ).current_intent
+    assert first.action_taken == "clarify"
+    assert second.action_taken == "clarify"
+    assert intent.category == "electronics"
+    assert intent.subcategory == "laptops"
+    assert intent.product_query == "laptop"
+    assert intent.budget_max == 80000
+    assert intent.is_budget_strict is True
+    assert final.recommendations
+    assert final.recommendations[0].product.product_id == "prod_elec_001"
+    assert all(
+        recommendation.product.product_id != "prod_elec_002"
+        for recommendation in final.recommendations
+    )
+    assert not final.fallback
+
+
+def test_null_optional_llm_booleans_use_safe_defaults():
+    intent = ExtractedIntent.model_validate(
+        {
+            "category": "electronics",
+            "budget_is_approximate": None,
+            "exclude_sized_items": None,
+            "continues_previous": None,
+        }
+    )
+
+    assert intent.budget_is_approximate is False
+    assert intent.exclude_sized_items is False
+    assert intent.continues_previous is False
+
+
+def test_fallback_without_category_never_returns_arbitrary_catalog_products():
+    from app.agents.zero_result_fallback import ZeroResultFallbackAgent
+
+    intent = ExtractedIntent(product_query="student everyday")
+    fallback = ZeroResultFallbackAgent(load_and_validate_catalog()).generate_fallback(intent)
+
+    assert fallback.suggested_alternatives == []
+    assert fallback.result_kind == "no_match"
+
+
+def test_catalog_grounded_hiking_queries_return_real_products():
+    workflow = ShopSenseWorkflow()
+    with patch(
+        "app.agents.intent_extraction.extract_intent_with_llm",
+        side_effect=lambda text, history: deterministic_extract_intent(text, history),
+    ):
+        trail = workflow.execute_turn(
+            "catalog-grounded-trail",
+            "I'm going hiking. Recommend waterproof trail shoes under ₹10,000 with good grip",
+        )
+        boot = workflow.execute_turn(
+            "catalog-grounded-boot",
+            "Find a waterproof hiking boot under ₹16,000 for mountain hiking with ankle support",
+        )
+
+    assert [r.product.product_id for r in trail.recommendations] == ["prod_foot_001"]
+    assert [r.product.product_id for r in boot.recommendations] == ["prod_foot_003"]
+
+
+def test_new_running_request_does_not_inherit_hiking_constraints():
+    workflow = ShopSenseWorkflow()
+    session_id = "catalog-grounded-boundary"
+    with patch(
+        "app.agents.intent_extraction.extract_intent_with_llm",
+        side_effect=lambda text, history: deterministic_extract_intent(text, history),
+    ):
+        workflow.execute_turn(
+            session_id,
+            "I'm going hiking. Recommend waterproof trail shoes under ₹10,000",
+            turn_id=1,
+        )
+        response = workflow.execute_turn(
+            session_id,
+            "I need lightweight running shoes under ₹8,000 for daily road running",
+            turn_id=2,
+        )
+
+    assert [r.product.product_id for r in response.recommendations] == ["prod_foot_005"]
+
+
+def test_fallback_exposes_structured_approval_and_product_actions():
+    response = ShopSenseWorkflow().execute_turn(
+        "structured-fallback-actions",
+        "waterproof hiking boots under ₹1000",
+    )
+
+    assert response.fallback is not None
+    action_types = {action["type"] for action in response.fallback.actions}
+    assert "fallback_approve" in action_types
+    assert "fallback_reject" in action_types
+    assert all(
+        action["payload"].get("product_id")
+        for action in response.fallback.actions
+        if action["type"] == "select_product"
+    )
+
+
+def test_laptop_query_never_returns_non_laptops():
+    workflow = ShopSenseWorkflow()
+    with patch(
+        "app.agents.intent_extraction.extract_intent_with_llm",
+        side_effect=lambda text, history: deterministic_extract_intent(text, history),
+    ):
+        response = workflow.execute_turn(
+            "catalog-grounded-laptop",
+            "I need a laptop for college under ₹80,000 that is lightweight",
+        )
+
+    assert response.recommendations
+    assert all(
+        recommendation.product.subcategory == "laptops"
+        for recommendation in response.recommendations
+    )
+
+
+def test_named_comparison_uses_exact_catalog_products():
+    workflow = ShopSenseWorkflow()
+    with patch(
+        "app.agents.intent_extraction.extract_intent_with_llm",
+        side_effect=lambda text, history: deterministic_extract_intent(text, history),
+    ):
+        response = workflow.execute_turn(
+            "catalog-grounded-comparison",
+            "Compare the ZenBook Ultra 14 Lightweight Laptop and AeroBook Air 13 Budget Notebook",
+        )
+
+    assert response.action_taken == "compare"
+    assert {
+        item["product_id"] for item in (response.top_three_comparison or [])
+    } == {"prod_elec_001", "prod_elec_003"}
 
 
 def test_explicit_mens_watches_never_returns_womens_watches_or_other_accessories():

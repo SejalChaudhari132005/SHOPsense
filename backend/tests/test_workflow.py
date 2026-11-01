@@ -247,8 +247,8 @@ def test_workflow_named_comparison_uses_only_requested_products(workflow: ShopSe
     )
 
     expected_ids = {"prod_elec_004", "prod_elec_005"}
-    assert response.action_taken == "recommend"
-    assert {recommendation.product.product_id for recommendation in response.recommendations} == expected_ids
+    assert response.action_taken == "compare"
+    assert {item["product_id"] for item in response.top_three_comparison or []} == expected_ids
     assert {
         comparison["product_id"]
         for comparison in response.top_three_comparison or []

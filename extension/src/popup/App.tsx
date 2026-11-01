@@ -18,6 +18,7 @@ import {
   ExtractedProduct
 } from '../types';
 import apiClient, { ApiError } from '../services/api';
+import { formatPriceInINR } from '../services/currency';
 import storageService from '../services/storage';
 import { MOCK_PAGE_CONTEXTS } from './mockContexts';
 
@@ -187,7 +188,9 @@ export const App: React.FC = () => {
       const assistantMessage: ChatMessage = {
         id: 'msg_asst_' + Date.now(),
         sender: 'assistant',
-        text: response.message,
+        text: response.analysis_summary
+          ? `${response.analysis_summary}\n\n${response.message}`
+          : response.message,
         timestamp: Date.now(),
         turnId: response.turn_id,
         actionTaken: response.action_taken,
@@ -304,7 +307,8 @@ export const App: React.FC = () => {
   // Analyze extracted product from active tab
   const handleAnalyzeExtractedProduct = (product: ExtractedProduct) => {
     const brandPrefix = product.brand ? `${product.brand} ` : '';
-    const priceText = product.price ? ` ($${product.price} ${product.currency || 'USD'})` : '';
+    const formattedPrice = formatPriceInINR(product.price, product.currency);
+    const priceText = formattedPrice !== 'Price unavailable' ? ` (${formattedPrice})` : '';
     const prompt = `Can you analyze ${brandPrefix}${product.product_name}${priceText}? What are its key specifications, standout strengths, trade-offs, and value for money?`;
     handleSendMessage(prompt);
   };
@@ -312,7 +316,10 @@ export const App: React.FC = () => {
   // Find alternatives to extracted product
   const handleFindAlternatives = (product: ExtractedProduct) => {
     const brandPrefix = product.brand ? `${product.brand} ` : '';
-    const priceLimit = product.price ? ` around or under $${product.price}` : '';
+    const formattedPrice = formatPriceInINR(product.price, product.currency);
+    const priceLimit = formattedPrice !== 'Price unavailable'
+      ? ` around or under ${formattedPrice}`
+      : '';
     const prompt = `Find the best verified alternatives in the catalog for ${brandPrefix}${product.product_name}${priceLimit}. Compare their features and value.`;
     handleSendMessage(prompt);
   };
@@ -370,7 +377,7 @@ export const App: React.FC = () => {
             onClick={() => handleSwitchSim('amazon_sony')}
             title="Simulate Amazon Sony Headphones extraction"
           >
-            Amazon (USD)
+            Amazon page (INR display)
           </button>
           <button
             type="button"
@@ -445,11 +452,22 @@ export const App: React.FC = () => {
 
                 <div className={`message-bubble ${msg.isError ? 'bubble-error' : ''}`}>
                   {/* Message Text */}
-                  <div className="message-text">
-                    {msg.text.split('\n\n').map((paragraph, pIdx) => (
-                      <p key={pIdx}>{paragraph}</p>
-                    ))}
-                  </div>
+                  {!msg.fallback?.fallback_needed && (() => {
+                    const clarificationQuestion = msg.clarification?.needs_clarification
+                      ? msg.clarification.clarification_question?.trim()
+                      : undefined;
+                    const displayText = clarificationQuestion
+                      ? msg.text.split(clarificationQuestion).join('').trim()
+                      : msg.text;
+
+                    return displayText ? (
+                    <div className="message-text">
+                      {displayText.split('\n\n').map((paragraph, pIdx) => (
+                        <p key={pIdx}>{paragraph}</p>
+                      ))}
+                    </div>
+                    ) : null;
+                  })()}
 
                   {/* Clarification Box if present */}
                   {msg.clarification && msg.clarification.needs_clarification && (
@@ -464,8 +482,10 @@ export const App: React.FC = () => {
                     <FallbackCard
                       fallback={msg.fallback}
                       onApproveRelaxation={(proposedBudget) => {
-                        if (proposedBudget) {
-                          handleSendMessage(`Search with proposed relaxed budget of $${proposedBudget}`);
+                        if (proposedBudget != null) {
+                          handleSendMessage(
+                            `Search with proposed relaxed budget of ₹${proposedBudget}`,
+                          );
                         } else {
                           handleSendMessage('Proceed with proposed constraint relaxation');
                         }

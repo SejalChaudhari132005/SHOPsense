@@ -52,22 +52,25 @@ This document tracks progress across all implementation milestones for ShopSense
   - [x] Shared orchestrator and session memory integration
   - [x] 65 total unit and integration tests passing with 100% green status
 
-- [ ] **Milestone 6: Advanced Intelligence Capabilities**
-  - [ ] "Why Not" Analysis mode (detailed breakdown of why a given product was excluded)
-  - [ ] Budget-Relaxation Diff View (side-by-side original vs relaxed constraints)
-  - [ ] Context-Aware Complementary Product suggestions (non-intrusive up-sell/cross-sell)
-  - [ ] Source attribution and store stock verification
+- [x] **Milestone 6: Advanced Intelligence Capabilities**
+  - [x] "Why Not" Analysis mode (detailed breakdown of why a given product was excluded)
+  - [x] Budget-Relaxation Diff View (side-by-side original vs relaxed constraints)
+  - [x] Context-Aware Complementary Product suggestions (non-intrusive up-sell/cross-sell)
+  - [x] Source attribution and adapter stock/status reporting (live integrations require credentials)
 
 - [ ] **Milestone 7: Chrome Extension Interface & Component Suite**
-  - [ ] Extension build pipeline and Manifest V3 packaging
-  - [ ] Conversational chat interface with streaming/multi-turn bubbles
-  - [ ] Interactive product cards with fit scores, specs, and store links
-  - [ ] Visual Comparison Dashboard for top-3 candidates with score breakdown
-  - [ ] Consented Preferences Manager modal (view, edit, delete, export)
-  - [ ] Content script context extraction on live e-commerce tabs
+  - [x] Extension build pipeline and Manifest V3 packaging
+  - [x] Conversational chat interface with multi-turn conversation
+  - [ ] Streaming responses / live assistant progress updates
+  - [x] Interactive product cards with fit scores, specs, and store links
+  - [x] Visual Comparison Dashboard for top candidates with score breakdown
+  - [x] Consented Preferences Manager modal (view, edit, delete)
+  - [x] Content script context extraction on supported e-commerce tabs
 
 - [ ] **Milestone 8: System Verification, Testing & Polish**
-  - [ ] End-to-end integration tests (vague queries, strict budgets, multi-turn refinement)
-  - [ ] Error handling & rate limiting resiliency
-  - [ ] Production extension build verification (`dist/`)
+  - [x] End-to-end integration tests (vague queries, strict budgets, multi-turn refinement)
+  - [ ] Rate limiting and production resiliency verification
+  - [x] Production extension build verification (`dist/`)
+  - [ ] Apply consented cross-session preferences automatically during chat retrieval
+  - [ ] Validate live marketplace integrations, inventory, and shipping with production credentials
   - [ ] Final user manual and demonstration walkthrough

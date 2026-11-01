@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { CompareResponse } from '../../types';
 import apiClient from '../../services/api';
+import { formatPriceInINR } from '../../services/currency';
 
 interface CompareModalProps {
   productIds: string[];
@@ -156,7 +157,7 @@ export const CompareModal: React.FC<CompareModalProps> = ({
                       </h4>
 
                       <div style={{ fontSize: '14px', fontWeight: 700, color: '#24221F' }}>
-                        {item.currency === 'INR' ? '₹' : '$'}{item.price.toLocaleString()}
+                        {formatPriceInINR(item.price, item.currency)}
                       </div>
 
                       {/* Fit Score Badge */}

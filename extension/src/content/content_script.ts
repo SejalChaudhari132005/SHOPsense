@@ -2,6 +2,7 @@
 // Safely extracts visible product data from supported e-commerce pages using modular adapters.
 
 import extractionRegistry from '../extraction';
+import { formatPriceInINR } from '../services/currency';
 import { PageContext } from '../types';
 
 (() => {
@@ -28,7 +29,9 @@ import { PageContext } from '../types';
           host: result.host,
           url: result.url,
           title: result.product.product_name,
-          price: result.product.price ? `${result.product.price} ${result.product.currency || ''}` : result.product.raw_price,
+          price: result.product.price !== null
+            ? formatPriceInINR(result.product.price, result.product.currency)
+            : 'Price unavailable',
           brand: result.product.brand,
           category: result.product.category,
           imageUrl: result.product.image_url,

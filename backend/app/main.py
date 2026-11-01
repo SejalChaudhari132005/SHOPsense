@@ -5,8 +5,10 @@ Includes CORS, request size limit middleware, safe exception handling, and OpenA
 """
 
 import logging
+from pathlib import Path
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -55,6 +57,13 @@ app = FastAPI(
     description="Conversational Shopping Assistant Backend powered by LangGraph and 10 specialized agents.",
     docs_url="/docs",
     redoc_url="/redoc"
+)
+
+CATALOG_IMAGE_DIR = Path(__file__).resolve().parent.parent / "static" / "catalog-images"
+app.mount(
+    "/catalog-images",
+    StaticFiles(directory=str(CATALOG_IMAGE_DIR)),
+    name="catalog-images",
 )
 
 # Request Size Limit Middleware

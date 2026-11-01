@@ -8,6 +8,7 @@ import {
   Tag
 } from 'lucide-react';
 import { ProductRecommendation } from '../../types';
+import { formatPriceInINR } from '../../services/currency';
 
 interface ProductCardProps {
   recommendation: ProductRecommendation;
@@ -28,22 +29,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const [imageError, setImageError] = useState(false);
 
   const { product, fit_score, explanation, unverified_aspects } = recommendation;
-
-  // Format currency display cleanly
-  const formatPrice = (price: number, currency: string) => {
-    try {
-      const symbols: Record<string, string> = {
-        USD: '$',
-        EUR: '€',
-        GBP: '£',
-        INR: '₹',
-      };
-      const symbol = symbols[currency.toUpperCase()] || currency + ' ';
-      return `${symbol}${price.toLocaleString()}`;
-    } catch {
-      return `${currency} ${price}`;
-    }
-  };
 
   const handleOpenProduct = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -94,6 +79,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             <span>Features: {fit_score.feature_score.toFixed(0)}/25</span>
             <span>Budget: {fit_score.budget_score.toFixed(0)}/20</span>
           </div>
+          {fit_score.retrieval_score != null && fit_score.retrieval_score > 0 && (
+            <div style={{ marginTop: '5px', color: '#6B4F3A' }}>
+              <span>Query relevance: {fit_score.retrieval_score.toFixed(0)}%</span>
+              {fit_score.retrieval_sources?.length ? (
+                <span> · {fit_score.retrieval_sources.join(' + ')}</span>
+              ) : null}
+            </div>
+          )}
         </div>
       )}
 
@@ -124,7 +117,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           </h3>
 
           <div className="card-price-row">
-            <span className="card-price">{formatPrice(product.price, product.currency)}</span>
+            <span className="card-price">{formatPriceInINR(product.price, product.currency)}</span>
             {product.rating != null && (
               <span className="card-rating" title={`Rating: ${product.rating}`}>
                 ★ {product.rating.toFixed(1)}
@@ -186,7 +179,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               onClick={() => onWhyNotClick(product.product_id, product.product_name)}
               title="Understand why this item was chosen or how it compares"
             >
-              Why Not?
+              Why this item?
             </button>
           )}
 

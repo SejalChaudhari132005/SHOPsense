@@ -103,6 +103,9 @@ console.log('\n[Test Group 3: Currency Formats Parsing]');
   const gbp = parsePriceAndCurrency('£249.99');
   assert(gbp.numericPrice === 249.99 && gbp.currency === 'GBP', 'GBP format (£249.99) -> 249.99 GBP');
 
+  const unmarked = parsePriceAndCurrency('18,999');
+  assert(unmarked.numericPrice === 18999 && unmarked.currency === 'INR', 'Unmarked prices default to INR');
+
   // Full Flipkart page with INR
   const flipkartHtml = loadFixture('flipkart_inr_product.html');
   const flipkartDom = new JSDOM(flipkartHtml, { url: 'https://www.flipkart.com/boat-rockerz/p/itm123' });

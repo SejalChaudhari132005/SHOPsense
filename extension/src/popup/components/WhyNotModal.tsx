@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { WhyNotResponse, ProductRecommendation } from '../../types';
 import apiClient from '../../services/api';
+import { formatPriceInINR } from '../../services/currency';
 
 interface WhyNotModalProps {
   productId: string;
@@ -127,7 +128,7 @@ export const WhyNotModal: React.FC<WhyNotModalProps> = ({
               >
                 {availableRecommendations.map((rec) => (
                   <option key={rec.product.product_id} value={rec.product.product_id}>
-                    {rec.product.brand} - {rec.product.product_name} (${rec.product.price})
+                    {rec.product.brand} - {rec.product.product_name} ({formatPriceInINR(rec.product.price, rec.product.currency)})
                   </option>
                 ))}
               </select>
@@ -197,11 +198,11 @@ export const WhyNotModal: React.FC<WhyNotModalProps> = ({
                       Comparison with Recommended Choice:
                     </span>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', fontSize: '12px', color: '#24221F', marginBottom: '4px' }}>
-                      {comp.candidate_price && <span>Candidate: ${comp.candidate_price}</span>}
+                      {comp.candidate_price && <span>Candidate: {formatPriceInINR(comp.candidate_price, 'INR')}</span>}
                       {comp.recommended_price && <ArrowRight size={11} style={{ color: '#8A8176' }} />}
                       {comp.recommended_price && (
                         <span style={{ fontWeight: 600, color: '#78836B' }}>
-                          Recommended: ${comp.recommended_price} {comp.recommended_name ? `(${comp.recommended_name})` : ''}
+                          Recommended: {formatPriceInINR(comp.recommended_price, 'INR')} {comp.recommended_name ? `(${comp.recommended_name})` : ''}
                         </span>
                       )}
                     </div>

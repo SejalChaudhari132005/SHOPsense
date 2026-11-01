@@ -512,6 +512,21 @@ def test_agent6_ranking_fit_scoring():
     assert "category:electronics" in top_score.exact_matches
 
 
+def test_agent6_distinct_products_do_not_all_tie():
+    catalog = load_and_validate_catalog()
+    products = [
+        product for product in catalog
+        if product.category == "footwear"
+    ][:3]
+    intent = deterministic_extract_intent(
+        "running shoes under ₹16000 for daily running"
+    )
+
+    ranked = RankingFitScoringAgent().rank(products, intent)
+
+    assert len({score.total_score for _, score in ranked}) > 1
+
+
 # ==========================================
 # Agent 7: Explanation Generation Tests
 # ==========================================

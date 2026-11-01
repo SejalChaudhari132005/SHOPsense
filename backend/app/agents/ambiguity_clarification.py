@@ -33,6 +33,16 @@ CATEGORY_REQUIRED_ATTRIBUTES = {
     "clothing": ("size",),
 }
 
+CONTEXT_CLARIFICATION_BY_SUBCATEGORY = {
+    "laptops": (
+        "What will you mainly use it for: programming, gaming, office work, "
+        "or general use?"
+    ),
+    "audio": (
+        "Would you prefer over-ear headphones or in-ear earbuds?"
+    ),
+}
+
 
 class AmbiguityClarificationAgent:
     """
@@ -336,6 +346,18 @@ class AmbiguityClarificationAgent:
                 "Clarification gated: the gift category requires recipient sizing "
                 "to avoid unsuitable recommendations."
             )
+        elif (
+            intent.subcategory in CONTEXT_CLARIFICATION_BY_SUBCATEGORY
+            and not intent.intended_use
+            and intent.purchase_intent != "gift"
+        ):
+            question = CONTEXT_CLARIFICATION_BY_SUBCATEGORY[intent.subcategory]
+            suggested_options = []
+            decision_reason = (
+                "Clarification gated: the catalog contains materially different "
+                "use-case options for this product type."
+            )
+            needs_clarification = True
         elif needs_clarification:
             if ambiguous_words and intent.budget_max is None:
                 question = f"You mentioned looking for something '{ambiguous_words[0]}'. What target budget range should I focus on?"

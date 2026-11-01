@@ -9,13 +9,19 @@ import re
 from typing import Dict, List, Optional, Tuple
 from app.models.product import Product
 from app.models.state import ExtractedIntent, ProductFitScore
+from app.core.config import settings
 from app.services.currency_service import convert_currency
 from app.services.catalog_service import (
     canonicalize_category,
     match_synonyms,
     product_matches_subcategory,
 )
-from app.services.retrieval_constraints import evaluate_hard_constraints, resolve_hard_value
+from app.services.retrieval_constraints import (
+    evaluate_hard_constraints,
+    budget_ceiling_inr,
+    resolve_hard_value,
+    resolve_verified_feature,
+)
 
 
 class RankingFitScoringAgent:
@@ -38,10 +44,7 @@ class RankingFitScoringAgent:
         has_retrieval_scores = bool(retrieval_scores)
 
         max_inr = None
-        if intent.budget_max is not None:
-            max_inr = convert_currency(
-                intent.budget_max, intent.budget_currency, "INR"
-            )
+        max_inr = budget_ceiling_inr(intent)
 
         for p in candidates:
             p_price_inr = convert_currency(p.price, p.currency, "INR")
@@ -58,12 +61,9 @@ class RankingFitScoringAgent:
 
             # 1. Hard Constraint Verification
             is_eligible = constraint_result.is_eligible
-            relevance = retrieval_scores.get(
-                p.product_id,
-                1.0 if not has_retrieval_scores else 0.0,
-            )
+            relevance = retrieval_scores.get(p.product_id, 1.0)
             for hk in intent.hard_constraints:
-                val = resolve_hard_value(p, hk)
+                val = resolve_verified_feature(p, hk) if isinstance(intent.hard_constraints[hk], bool) else resolve_hard_value(p, hk)
                 if val is None:
                     if hk not in unknown_attributes:
                         unknown_attributes.append(hk)
@@ -81,7 +81,7 @@ class RankingFitScoringAgent:
                 else:
                     category_score = 0.0
             else:
-                category_score = 15.0  # open category query
+                category_score = 0.0
 
             # 3. Factor 2: Use-Case Fit (Max 25.0)
             use_case_score = 0.0
@@ -110,7 +110,13 @@ class RankingFitScoringAgent:
                     )
                 ]
                 if use_terms:
-                    use_case_score = 25.0 * len(matched_use_terms) / len(use_terms)
+                    literal_use_case = len(matched_use_terms) / len(use_terms)
+                    use_case_score = 25.0 * max(literal_use_case, relevance)
+                    if not matched_use_terms:
+                        is_eligible = False
+                        violated_hard.append(
+                            "Product has no catalog evidence for the primary intended use."
+                        )
                     if len(matched_use_terms) == len(use_terms):
                         exact_matches.append(f"use_case:{intent.intended_use.lower()}")
                     elif matched_use_terms:
@@ -118,13 +124,15 @@ class RankingFitScoringAgent:
                             f"use_case:{','.join(matched_use_terms)}"
                         )
             else:
-                use_case_score = 20.0
+                use_case_score = 0.0
             if intent.subcategory and product_matches_subcategory(p.subcategory, intent.subcategory):
                 exact_matches.append(f"subcategory:{intent.subcategory}")
 
             # 4. Factor 3: Feature & Spec Matches (Max 25.0)
             feature_score = 0.0
-            features_to_check = intent.feature_preferences or intent.soft_preferences
+            features_to_check = list(dict.fromkeys(
+                intent.feature_preferences + intent.soft_preferences
+            ))
             if features_to_check:
                 points_per_feat = 25.0 / len(features_to_check)
                 for feat in features_to_check:
@@ -135,7 +143,9 @@ class RankingFitScoringAgent:
                     found = False
                     # Check lightweight
                     if clean_f == "lightweight":
-                        weight = p.specifications.get("weight_kg") or p.attributes.get("weight_kg")
+                        weight = p.specifications.get("weight_kg")
+                        if weight is None:
+                            weight = p.attributes.get("weight_kg")
                         if weight is not None and weight <= 1.5:
                             feature_score += points_per_feat
                             exact_matches.append(f"lightweight ({weight}kg)")
@@ -145,7 +155,7 @@ class RankingFitScoringAgent:
 
                     # Check waterproof
                     elif clean_f == "waterproof":
-                        wp = p.attributes.get("waterproof") or p.specifications.get("waterproof")
+                        wp = resolve_verified_feature(p, "waterproof")
                         if wp is True:
                             feature_score += points_per_feat
                             exact_matches.append("waterproof")
@@ -163,7 +173,7 @@ class RankingFitScoringAgent:
                             # Not found
                             pass
             else:
-                feature_score = 20.0
+                feature_score = 0.0
 
             # 5. Factor 4: Budget Compliance & Value Fit (Max 20.0)
             budget_score = 0.0
@@ -198,7 +208,7 @@ class RankingFitScoringAgent:
                         over_ratio = (p_price_inr - max_inr) / max_inr
                         budget_score = max(0.0, 10.0 - (over_ratio * 20.0))
             else:
-                budget_score = 15.0
+                budget_score = 0.0
 
             # 6. Factor 5: Soft Preferences & Brand Fit (Max 10.0)
             preference_score = 0.0
@@ -206,8 +216,6 @@ class RankingFitScoringAgent:
                 if p.brand.lower() == intent.brand.lower():
                     preference_score += 3.0
                     exact_matches.append(f"brand:{p.brand}")
-            else:
-                preference_score += 3.0
 
             if intent.colour:
                 if p.colours and any(intent.colour.lower() in c.lower() for c in p.colours):
@@ -215,8 +223,6 @@ class RankingFitScoringAgent:
                     exact_matches.append(f"colour:{intent.colour}")
                 elif not p.colours:
                     unknown_attributes.append("colours")
-            else:
-                preference_score += 3.0
 
             product_evidence = " ".join(
                 [p.product_name, p.description, *p.tags, *p.use_cases]
@@ -255,15 +261,25 @@ class RankingFitScoringAgent:
                     )
             preference_score = min(10.0, preference_score)
 
-            # Total score
-            total = category_score + use_case_score + feature_score + budget_score + preference_score
-            normalized_total = min(100.0, max(0.0, round(total, 1)))
+            topical = use_case_score / 25.0
+            budget_f = budget_score / 20.0
+            pref_f = preference_score / 10.0
+            normalized_total = round(
+                100.0 * relevance * (
+                    0.6 + 0.2 * topical + 0.1 * budget_f + 0.1 * pref_f
+                ),
+                1,
+            )
 
             # If hard constraint failed, total score is zeroed out for recommendation eligibility
             if not is_eligible:
                 normalized_total = 0.0
-            elif has_retrieval_scores:
-                normalized_total = round(normalized_total * (0.75 + 0.25 * relevance), 1)
+            elif relevance < settings.MIN_RELEVANCE:
+                is_eligible = False
+                violated_hard.append("Topical relevance is below the minimum threshold.")
+                normalized_total = 0.0
+            if unknown_attributes and is_eligible:
+                normalized_total = min(70.0, normalized_total)
 
             fit_score = ProductFitScore(
                 product_id=p.product_id,
@@ -290,6 +306,7 @@ class RankingFitScoringAgent:
         scored_pairs.sort(
             key=lambda pair: (
                 pair[1].is_eligible,
+                not pair[1].unknown_attributes,
                 pair[1].total_score,
                 pair[1].retrieval_score,
                 pair[0].rating or 0.0,

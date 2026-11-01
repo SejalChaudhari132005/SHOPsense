@@ -38,6 +38,7 @@ from app.agents.candidate_retrieval import CandidateRetrievalAgent
 from app.agents.ranking_fit import RankingFitScoringAgent
 from app.agents.explanation_generation import ExplanationGenerationAgent
 from app.agents.zero_result_fallback import ZeroResultFallbackAgent
+from app.core.config import settings
 from app.agents.session_memory import SessionMemoryAgent
 from app.services.retrieval_constraints import evaluate_recommendation_candidate
 from app.services.catalog_service import load_and_validate_catalog
@@ -64,6 +65,7 @@ AGENT_LOG_DETAILS = {
     "node_zero_result_fallback": ("08", "Zero-Result & Fallback"),
     "node_session_memory_in": ("09", "Session Memory Load"),
     "node_session_memory_out": ("09", "Session Memory Save"),
+    "node_comparison": ("07", "Comparison"),
     "node_save_session_and_respond": ("10", "Orchestrator Response"),
 }
 
@@ -255,11 +257,35 @@ class ShopSenseWorkflow:
         """Node 2 (Agent 9 - In): Retrieve prior session context and previous intent."""
         session_id = state.get("session_id", "default_session")
         session = self.session_memory_agent.get_or_create_session(session_id)
+        boundary = self.classify_session_boundary(
+            state.get("original_user_message", ""),
+            session.current_intent,
+            session.awaiting_clarification,
+        )
         return {
             "session_memory": session,
             "previous_intent": session.current_intent,
+            "session_boundary": boundary,
             "workflow_status": "context_merged"
         }
+
+    @staticmethod
+    def classify_session_boundary(
+        message: str,
+        previous: Optional[ExtractedIntent],
+        awaiting_clarification: bool = False,
+    ) -> str:
+        """Classify whether prior intent is safe to carry into this turn."""
+        lower = message.casefold().strip()
+        if re.search(r"\b(compare|comparison|versus|vs\.?)\b", lower):
+            return "compare"
+        if previous is None:
+            return "new"
+        if awaiting_clarification:
+            return "clarification_answer"
+        if re.search(r"\b(?:new request|start over|new search|reset)\b", lower):
+            return "new"
+        return "refine"
 
     def node_intent_extraction(self, state: ShopSenseGraphState) -> Dict[str, Any]:
         """Node 3 (Agent 2): Extract structured intent and merge context."""
@@ -267,10 +293,16 @@ class ShopSenseWorkflow:
         prev_intent = state.get("previous_intent")
 
         try:
+            previous_for_extraction = (
+                prev_intent
+                if state.get("session_boundary") in {"refine", "clarification_answer"}
+                else None
+            )
             intent = self.intent_extraction_agent.extract(
                 ingested=ingested,
                 conversation_history=None,
-                previous_intent=prev_intent
+                previous_intent=previous_for_extraction,
+                clarification_answer=state.get("session_boundary") == "clarification_answer",
             )
             return {
                 "current_intent": intent,
@@ -287,6 +319,50 @@ class ShopSenseWorkflow:
                 "workflow_status": "extracted"
             }
 
+    def node_comparison(self, state: ShopSenseGraphState) -> Dict[str, Any]:
+        """Build a comparison only from exact catalog product IDs."""
+        from app.services.comparison_service import compare_products_side_by_side
+
+        intent = state.get("current_intent")
+        relevance_scores = state.get("relevance_scores", {})
+        session = state.get("session_memory")
+        try:
+            comparison = compare_products_side_by_side(
+                intent.comparison_product_ids if intent else [],
+                session=session,
+            )
+            response = OrchestratorResponse(
+                session_id=state.get("session_id", "default_session"),
+                turn_id=state.get("turn_id", 1),
+                action_taken="compare",
+                message=comparison.recommendation_summary,
+                top_three_comparison=[
+                    {
+                        "product_id": item.product_id,
+                        "product_name": item.product_name,
+                        "price": item.price,
+                        "currency": item.currency,
+                        "key_specs": item.key_specs,
+                        "hard_constraint_satisfaction": item.hard_constraint_satisfaction,
+                    }
+                    for item in comparison.products
+                ],
+                session_summary={
+                    "session_id": state.get("session_id", "default_session"),
+                    "comparison_product_ids": intent.comparison_product_ids if intent else [],
+                },
+            )
+            return {
+                "comparison_response": response.model_dump(),
+                "workflow_status": "comparison_ready",
+            }
+        except (ValueError, TypeError) as exc:
+            logger.warning("Comparison request could not be completed: %s", exc)
+            return {
+                "error_information": str(exc),
+                "workflow_status": "error",
+            }
+
     def node_ambiguity_clarification(self, state: ShopSenseGraphState) -> Dict[str, Any]:
         """Node 4 (Agent 3): Evaluate completeness & confidence-gated clarification."""
         intent = state.get("current_intent")
@@ -299,6 +375,15 @@ class ShopSenseWorkflow:
             already_asked_questions=asked,
             raw_user_message=raw_msg
         )
+        if decision.suggested_options and not decision.actions:
+            decision.actions = [
+                {
+                    "type": "select_option",
+                    "label": option,
+                    "payload": {"value": option},
+                }
+                for option in decision.suggested_options
+            ]
 
         status = "clarifying" if decision.needs_clarification else "clarification_passed"
         return {
@@ -345,6 +430,8 @@ class ShopSenseWorkflow:
                 "retrieved_candidates": retrieval.candidates,
                 "eligible_candidates": retrieval.candidates,
                 "retrieval_scores": retrieval.retrieval_scores,
+                "relevance_scores": retrieval.relevance_scores,
+                "near_misses": retrieval.near_misses,
                 "retrieval_sources": retrieval.retrieval_sources,
                 "retrieval_mode": retrieval.retrieval_mode,
                 "data_source_status": "catalog_ready",
@@ -388,7 +475,12 @@ class ShopSenseWorkflow:
         validated_pairs = [
             (product, score)
             for product, score in ranked_pairs
-            if evaluate_recommendation_candidate(product, intent).is_eligible
+            if (
+                evaluate_recommendation_candidate(product, intent).is_eligible
+                and score.is_eligible
+                and score.relevance >= settings.MIN_RELEVANCE
+                and score.total_score >= settings.MIN_FIT_SCORE
+            )
         ]
         if not validated_pairs:
             _, analysis_summary = self.explanation_agent.explain_with_analysis(
@@ -399,7 +491,11 @@ class ShopSenseWorkflow:
                 "recommendations": [],
                 "analysis_summary": analysis_summary,
                 "follow_up_suggestion": None,
-                "fallback": self.fallback_agent.generate_fallback(intent),
+                "fallback": self.fallback_agent.generate_fallback(
+                    intent,
+                    near_misses=state.get("near_misses", []),
+                    relevance_scores=state.get("relevance_scores", {}),
+                ),
                 "workflow_status": "fallback_invoked",
             }
 
@@ -425,7 +521,12 @@ class ShopSenseWorkflow:
     def node_zero_result_fallback(self, state: ShopSenseGraphState) -> Dict[str, Any]:
         """Node 9 (Agent 8): Intelligent constraint relaxation and alternative generation."""
         intent = state.get("current_intent")
-        fallback = self.fallback_agent.generate_fallback(intent)
+        relevance_scores = state.get("relevance_scores", {})
+        fallback = self.fallback_agent.generate_fallback(
+            intent,
+            near_misses=state.get("near_misses", []),
+            relevance_scores=relevance_scores,
+        )
         return {
             "fallback": fallback,
             "workflow_status": "fallback_invoked"
@@ -443,7 +544,7 @@ class ShopSenseWorkflow:
 
         if intent:
             previous = state.get("previous_intent")
-            topic_changed = bool(
+            topic_changed = state.get("session_boundary") == "new" or bool(
                 previous
                 and intent.category
                 and previous.category
@@ -456,6 +557,17 @@ class ShopSenseWorkflow:
                 asked_question=asked_q,
                 topic_changed=topic_changed,
             )
+            updated_session.awaiting_clarification = bool(
+                clarification and clarification.needs_clarification
+            )
+            if clarification and clarification.needs_clarification:
+                updated_session.last_response_kind = "clarify"
+            elif state.get("comparison_response"):
+                updated_session.last_response_kind = "compare"
+            elif state.get("fallback"):
+                updated_session.last_response_kind = "fallback"
+            else:
+                updated_session.last_response_kind = "recommend"
             return {
                 "session_memory": updated_session,
                 "workflow_status": "session_saved"
@@ -473,6 +585,13 @@ class ShopSenseWorkflow:
         intent = state.get("current_intent")
         session = state.get("session_memory")
         error_info = state.get("error_information")
+        comparison_response = state.get("comparison_response")
+
+        if comparison_response:
+            return {
+                "final_response": OrchestratorResponse.model_validate(comparison_response),
+                "workflow_status": "completed",
+            }
 
         # 1. Error response
         if state.get("workflow_status") == "error" or error_info:
@@ -534,6 +653,37 @@ class ShopSenseWorkflow:
             )
             return {"final_response": resp, "workflow_status": "completed"}
 
+        if intent and recommendations:
+            validated_recommendations = []
+            rejected_count = 0
+            for recommendation in recommendations:
+                evaluation = evaluate_recommendation_candidate(
+                    recommendation.product,
+                    intent,
+                )
+                score = recommendation.fit_score
+                if (
+                    evaluation.is_eligible
+                    and score.is_eligible
+                    and score.relevance >= settings.MIN_RELEVANCE
+                    and score.total_score >= settings.MIN_FIT_SCORE
+                ):
+                    validated_recommendations.append(recommendation)
+                else:
+                    rejected_count += 1
+                    logger.warning(
+                        "Final validation rejected product_id=%s: %s",
+                        recommendation.product.product_id,
+                        "; ".join(evaluation.violations),
+                    )
+            recommendations = validated_recommendations
+            if rejected_count and not recommendations:
+                fallback = self.fallback_agent.generate_fallback(
+                    intent,
+                    near_misses=state.get("near_misses", []),
+                    relevance_scores=relevance_scores,
+                )
+
         # 3. Fallback response
         if fallback and fallback.fallback_needed and not recommendations:
             resp = OrchestratorResponse(
@@ -573,7 +723,8 @@ class ShopSenseWorkflow:
         if intent and intent.recipient:
             intro += f" (ideal for your {intent.recipient})"
         if intent and intent.budget_max:
-            intro += f" staying within your ₹{intent.budget_max:,.0f} limit"
+            budget_word = "around" if intent.budget_is_approximate else "within"
+            intro += f" {budget_word} your ₹{intent.budget_max:,.0f} limit"
         intro += "."
 
         resp = OrchestratorResponse(
@@ -615,9 +766,17 @@ class ShopSenseWorkflow:
         intent = state.get("current_intent")
         if intent and intent.shopping_intent == "category_discovery":
             return "node_session_memory_out"
+        if intent and intent.shopping_intent == "comparison":
+            return "node_comparison"
         if clarification and clarification.needs_clarification:
             return "node_session_memory_out"
         return "node_catalog_mapping"
+
+    def route_after_intent(self, state: ShopSenseGraphState) -> str:
+        intent = state.get("current_intent")
+        if intent and intent.shopping_intent == "comparison":
+            return "node_comparison"
+        return "node_ambiguity_clarification"
 
     def route_after_retrieval(self, state: ShopSenseGraphState) -> str:
         """
@@ -647,6 +806,7 @@ class ShopSenseWorkflow:
             ("node_ranking_fit", self.node_ranking_fit),
             ("node_explanation_generation", self.node_explanation_generation),
             ("node_session_memory_out", self.node_session_memory_out),
+            ("node_comparison", self.node_comparison),
             ("node_save_session_and_respond", self.node_save_session_and_respond),
         ]
         for node_name, node in agent_nodes:
@@ -665,7 +825,15 @@ class ShopSenseWorkflow:
         )
 
         builder.add_edge("node_session_memory_in", "node_intent_extraction")
-        builder.add_edge("node_intent_extraction", "node_ambiguity_clarification")
+        builder.add_conditional_edges(
+            "node_intent_extraction",
+            self.route_after_intent,
+            {
+                "node_comparison": "node_comparison",
+                "node_ambiguity_clarification": "node_ambiguity_clarification",
+            },
+        )
+        builder.add_edge("node_comparison", "node_session_memory_out")
 
         # Clarification branch: Stop and respond vs. Proceed to search
         builder.add_conditional_edges(
@@ -732,12 +900,16 @@ class ShopSenseWorkflow:
                 "eligible_candidates": [],
                 "ranked_candidates": [],
                 "retrieval_scores": {},
+                "relevance_scores": {},
+                "near_misses": [],
                 "retrieval_sources": {},
                 "retrieval_mode": "hybrid",
                 "catalog_mapping": None,
                 "follow_up_suggestion": None,
                 "error_information": None,
                 "final_response": None,
+                "session_boundary": "new",
+                "comparison_response": None,
             }
 
             config = {"configurable": {"thread_id": session_id}}

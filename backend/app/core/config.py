@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     HYBRID_COSINE_FLOOR: float = Field(default=0.25, ge=-1.0, le=1.0)
     HYBRID_COSINE_CEIL: float = Field(default=0.60, ge=-1.0, le=1.0)
     MIN_RELEVANCE: float = Field(default=0.30, ge=0.0, le=1.0)
+    MIN_FIT_SCORE: float = Field(default=50.0, ge=0.0, le=100.0)
+    BUDGET_APPROX_TOLERANCE: float = Field(default=0.10, ge=0.0, le=1.0)
 
     # Testing & Mocking (automatically mock during pytest to preserve API quotas and avoid 429 rate limits)
     MOCK_LLM_FOR_TESTS: bool = ("pytest" in sys.modules or "PYTEST_CURRENT_TEST" in os.environ)

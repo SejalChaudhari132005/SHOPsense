@@ -67,6 +67,8 @@ _EXPLICIT_CATEGORY_PHRASES = {
     "automotive": {"automotive", "motorcycle", "motorcycles", "vehicle", "vehicles"},
 }
 
+SIZE_FREE_RE = re.compile(r"\b(?:size[-\s]?free|without sizing|no sizing)\b", re.IGNORECASE)
+
 
 def _contains_phrase(text: str, phrase: str) -> bool:
     normalized_text = " ".join(re.findall(r"[a-z0-9]+", text.casefold()))
@@ -145,7 +147,8 @@ class IntentExtractionAgent:
         self,
         ingested: IngestedQuery,
         conversation_history: Optional[List[Dict[str, str]]] = None,
-        previous_intent: Optional[ExtractedIntent] = None
+        previous_intent: Optional[ExtractedIntent] = None,
+        clarification_answer: bool = False,
     ) -> ExtractedIntent:
         if ingested.is_empty:
             return ExtractedIntent(
@@ -157,12 +160,23 @@ class IntentExtractionAgent:
         extraction_history = list(conversation_history or [])
         if previous_intent is not None:
             extraction_history.append({
-                "role": "assistant",
-                "content": "Previously established structured shopping intent: "
-                + previous_intent.model_dump_json(),
+                "role": "system",
+                "content": (
+                    "Previous request summary: "
+                    f"category={previous_intent.category or previous_intent.category_hint or 'none'}; "
+                    f"product={previous_intent.product_query or 'none'}; "
+                    f"use={previous_intent.intended_use or 'none'}. "
+                    "Return only slots stated or clearly continued in the current message; "
+                    "do not copy previous slots."
+                ),
             })
         intent = extract_intent_with_llm(ingested.sanitized_message, extraction_history)
-        explicit_intent = deterministic_extract_intent(ingested.sanitized_message)
+        explicit_intent = deterministic_extract_intent(
+            ingested.sanitized_message,
+            history=[{"role": "system", "content": "previous intent exists"}]
+            if previous_intent is not None
+            else None,
+        )
         if (
             explicit_intent.shopping_intent == "category_discovery"
             and not explicit_intent.category
@@ -185,15 +199,38 @@ class IntentExtractionAgent:
         if explicit_intent.subcategory:
             intent.subcategory = explicit_intent.subcategory
             intent.subcategory_is_explicit = True
+        intent.intended_use = explicit_intent.intended_use or intent.intended_use
+        intent.health_considerations = list(dict.fromkeys(
+            intent.health_considerations + explicit_intent.health_considerations
+        ))
+        intent.exclude_sized_items = (
+            intent.exclude_sized_items or explicit_intent.exclude_sized_items
+        )
+        intent.category_hint = explicit_intent.category_hint or intent.category_hint
         if explicit_intent.budget_max is not None or explicit_intent.budget_min is not None:
             intent.budget_max = explicit_intent.budget_max
             intent.budget_min = explicit_intent.budget_min
             intent.budget_currency = explicit_intent.budget_currency
             intent.is_budget_strict = explicit_intent.is_budget_strict
+            intent.budget_is_approximate = explicit_intent.budget_is_approximate
         if explicit_intent.budget_unlimited:
             intent.budget_unlimited = True
             intent.budget_min = None
             intent.budget_max = None
+        if (
+            explicit_intent.budget_max is not None
+            and not explicit_intent.budget_is_approximate
+            and re.search(
+                r"\b(?:budget|spend|price range)\s*(?:is|of|:)",
+                ingested.sanitized_message.casefold(),
+            )
+            and not re.search(
+                r"\b(?:under|below|less than|within|max|above|over|at least)\b",
+                ingested.sanitized_message.casefold(),
+            )
+        ):
+            intent.is_budget_strict = True
+            intent.budget_is_approximate = False
         if explicit_intent.shopping_intent == "comparison":
             intent.shopping_intent = "comparison"
             intent.purchase_intent = "comparison"
@@ -207,6 +244,9 @@ class IntentExtractionAgent:
             intent.feature_preferences + explicit_intent.feature_preferences
         ))
         intent = normalize_intent_contract(intent, ingested.sanitized_message)
+        intent.continues_previous = bool(
+            intent.continues_previous or explicit_intent.continues_previous
+        )
 
         matched_product = find_catalog_product_by_name(ingested.sanitized_message)
         if matched_product and intent.purchase_intent != "comparison":
@@ -256,59 +296,41 @@ class IntentExtractionAgent:
                             for term in ("dress", "dresses", "gown", "frock")
                         )
                     )
+                    or (
+                        subcategory in {"trail_running", "road_running"}
+                        and _contains_phrase(
+                            ingested.sanitized_message,
+                            subcategory.replace("_", " "),
+                        )
+                    )
+                    or (
+                        subcategory == "trail_running"
+                        and _contains_phrase(ingested.sanitized_message, "trail shoes")
+                    )
                 )
             )
-            query_text = ingested.sanitized_message.casefold()
-            mentions_hiking = re.search(
-                r"\b(?:hike|hikes|hiking|hiker|hikers)\b",
-                query_text,
-            )
-            mentions_knee_discomfort = re.search(
-                r"\b(?:knee|knees|joint|joints)\b.{0,40}"
-                r"\b(?:pain|strain|ache|hurt|sore|discomfort)\b",
-                query_text,
-            )
-            if mentions_hiking and mentions_knee_discomfort:
-                intent.intended_use = intent.intended_use or "hiking"
-                if "joint-friendly" not in intent.soft_preferences:
-                    intent.soft_preferences.append("joint-friendly")
-
-        size_free_choice = bool(
-            previous_intent is not None
-            and any(
-                phrase in ingested.sanitized_message.casefold()
-                for phrase in ("size-free", "size free", "without sizing")
-            )
-        )
+        size_free_choice = bool(SIZE_FREE_RE.search(ingested.sanitized_message))
         if size_free_choice:
             intent.exclude_sized_items = True
-            intent.category_hint = intent.category or intent.category_hint
-            if not intent.intended_use and previous_intent:
-                intent.intended_use = previous_intent.intended_use
-            intent.category_hint = category
+
+        # 2. Refinement & Context Merging
+        # If this is a follow-up turn (e.g. "make it cheaper", "only black ones", "what about size 10")
+        if previous_intent is not None:
+            intent = self._merge_with_previous_context(
+                intent, previous_intent, ingested.sanitized_message,
+                size_free=size_free_choice,
+                clarification_answer=clarification_answer,
+            )
+        else:
+            intent.topic_changed = False
+        if size_free_choice:
             intent.category = None
             intent.subcategory = None
             intent.product_query = None
             intent.category_is_explicit = False
             intent.subcategory_is_explicit = False
-
-        # 2. Refinement & Context Merging
-        # If this is a follow-up turn (e.g. "make it cheaper", "only black ones", "what about size 10")
-        if previous_intent is not None:
-            if size_free_choice:
-                intent.purchase_intent = previous_intent.purchase_intent
-                intent.shopping_intent = previous_intent.shopping_intent
-                intent.recipient = intent.recipient or previous_intent.recipient
-                intent.occasion = intent.occasion or previous_intent.occasion
-                if not intent.budget_unlimited and intent.budget_max is None:
-                    intent.budget_min = previous_intent.budget_min
-                    intent.budget_max = previous_intent.budget_max
-                    intent.budget_currency = previous_intent.budget_currency
-                    intent.is_budget_strict = previous_intent.is_budget_strict
-            else:
-                intent = self._merge_with_previous_context(
-                    intent, previous_intent, ingested.sanitized_message
-                )
+            if intent.category_hint in {"footwear", "clothing"}:
+                intent.category_hint = None
 
         # 2.5 Incorporate active tab / extracted product client_context
         ctx = ingested.client_context or {}
@@ -409,12 +431,57 @@ class IntentExtractionAgent:
         self,
         current: ExtractedIntent,
         previous: ExtractedIntent,
-        raw_text: str
+        raw_text: str,
+        *,
+        size_free: bool = False,
+        clarification_answer: bool = False,
     ) -> ExtractedIntent:
         """
         Preserves previously established constraints unless explicitly overridden by the user.
         """
         lower = raw_text.lower()
+
+        current_anchor = set(re.findall(
+            r"[a-z0-9]+",
+            (current.product_query or "").casefold(),
+        ))
+        previous_anchor = set(re.findall(
+            r"[a-z0-9]+",
+            (previous.product_query or "").casefold(),
+        ))
+        explicit_category_switch = bool(
+            current.category
+            and previous.category
+            and canonicalize_category(current.category)
+            != canonicalize_category(previous.category)
+        )
+        anchor_switch = bool(
+            current_anchor
+            and previous_anchor
+            and current_anchor.isdisjoint(previous_anchor)
+        )
+        if (
+            clarification_answer
+            and current.product_query
+            and previous.product_query
+            and current.product_query != previous.product_query
+            and find_catalog_product_by_name(raw_text) is None
+            and not any(
+                _contains_phrase(raw_text, phrase)
+                for phrases in _EXPLICIT_CATEGORY_PHRASES.values()
+                for phrase in phrases
+            )
+        ):
+            current.product_query = previous.product_query
+        if (
+            not current.continues_previous
+            and not size_free
+            and not clarification_answer
+            and (anchor_switch and not explicit_category_switch)
+        ):
+            current.topic_changed = True
+            current.is_refinement = False
+            return current
 
         is_refinement = current.shopping_intent == "refinement" or any(
             phrase in lower
@@ -469,6 +536,11 @@ class IntentExtractionAgent:
         current.exclude_sized_items = (
             current.exclude_sized_items or previous.exclude_sized_items
         )
+        if not current.intended_use and previous.intended_use:
+            current.intended_use = previous.intended_use
+        current.health_considerations = list(dict.fromkeys(
+            previous.health_considerations + current.health_considerations
+        ))
         if not current.subcategory and previous.subcategory and same_category:
             current.subcategory = previous.subcategory
             current.subcategory_is_explicit = previous.subcategory_is_explicit
@@ -478,10 +550,6 @@ class IntentExtractionAgent:
             current.comparison_product_ids = list(previous.comparison_product_ids)
 
         # Preserve Intended Use & Persona
-        if not current.intended_use and previous.intended_use:
-            current.intended_use = previous.intended_use
-        if not current.health_considerations and previous.health_considerations:
-            current.health_considerations = list(previous.health_considerations)
         if not current.recipient and previous.recipient:
             current.recipient = previous.recipient
         if not current.occasion and previous.occasion:
@@ -498,9 +566,6 @@ class IntentExtractionAgent:
         if not current.skill_level and previous.skill_level:
             current.skill_level = previous.skill_level
         if same_category:
-            current.health_considerations = list(dict.fromkeys(
-                previous.health_considerations + current.health_considerations
-            ))
             current.implicit_constraints = list({
                 (item.value.casefold(), item.evidence.casefold()): item
                 for item in previous.implicit_constraints + current.implicit_constraints
@@ -515,6 +580,7 @@ class IntentExtractionAgent:
                 current.budget_max = round(previous.budget_max * 0.8, 2)
                 current.budget_currency = previous.budget_currency
                 current.is_budget_strict = True
+                current.budget_is_approximate = False
                 current.is_refinement = True
         elif current.budget_unlimited:
             current.budget_min = None
@@ -529,6 +595,7 @@ class IntentExtractionAgent:
             current.budget_max = previous.budget_max
             current.budget_currency = previous.budget_currency
             current.is_budget_strict = previous.is_budget_strict
+            current.budget_is_approximate = previous.budget_is_approximate
         elif current.budget_max is not None and previous.budget_max is not None and current.budget_max != previous.budget_max:
             current.is_refinement = True
 
@@ -583,4 +650,5 @@ class IntentExtractionAgent:
             for item in merged_constraints
         }.values())
 
+        current.topic_changed = False
         return current

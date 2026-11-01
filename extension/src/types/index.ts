@@ -30,7 +30,6 @@ export interface Product {
   description: string;
   price: number;
   currency: string;
-  normalized_price_usd?: number | null;
   product_url?: string | null;
   image_url?: string | null;
   source_store: string;
@@ -55,6 +54,8 @@ export interface ProductFitScore {
   product_name: string;
   total_score: number;
   is_eligible: boolean;
+  retrieval_score?: number;
+  retrieval_sources?: string[];
   category_score: number;
   use_case_score: number;
   feature_score: number;
@@ -90,8 +91,10 @@ export interface ClarificationDecision {
 
 export interface FallbackSuggestion {
   fallback_needed: boolean;
+  result_kind?: 'exact_matches' | 'related_alternatives' | 'relaxed_alternatives' | 'no_valid_alternatives' | string;
   reason: string;
   relaxed_constraints: Record<string, any>;
+  preserved_constraints?: Record<string, any>;
   original_constraints: Record<string, any>;
   original_budget?: number | null;
   proposed_budget?: number | null;
@@ -118,6 +121,7 @@ export interface OrchestratorResponse {
   turn_id: number;
   action_taken: 'recommend' | 'clarify' | 'fallback' | 'error' | string;
   message: string;
+  analysis_summary?: string | null;
   recommendations: ProductRecommendation[];
   clarification?: ClarificationDecision | null;
   fallback?: FallbackSuggestion | null;
@@ -152,7 +156,6 @@ export interface ProductComparisonItem {
   category: string;
   price: number;
   currency: string;
-  normalized_price_usd: number;
   rating?: number | null;
   review_count?: number | null;
   highlights: string[];
