@@ -6,7 +6,9 @@ import {
   Send, 
   Loader2, 
   RotateCcw, 
-  Sparkles 
+  Sparkles,
+  Mic,
+  MicOff
 } from 'lucide-react';
 
 import { 
@@ -45,6 +47,8 @@ export const App: React.FC = () => {
   const [isConnecting, setIsConnecting] = useState<boolean>(true);
   const [backendHealth, setBackendHealth] = useState<BackendHealth | null>(null);
   const [pageContext, setPageContext] = useState<PageContext | null>(null);
+  const [isListening, setIsListening] = useState<boolean>(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
 
   // Modals & Panels
   const [comparedProductIds, setComparedProductIds] = useState<string[]>([]);
@@ -56,6 +60,8 @@ export const App: React.FC = () => {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const inputSourceRef = useRef<'text' | 'voice'>('text');
 
   // Auto-scroll chat to latest message
   const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
@@ -157,9 +163,65 @@ export const App: React.FC = () => {
     storageService.saveComparisonList(comparedProductIds);
   }, [comparedProductIds]);
 
+  const toggleVoiceInput = () => {
+    const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognitionAPI) {
+      setVoiceError('Voice input is not supported in this browser.');
+      return;
+    }
+    if (isListening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+
+    const recognition = new SpeechRecognitionAPI();
+    recognition.lang = navigator.language || 'en-IN';
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.onstart = () => {
+      setVoiceError(null);
+      setIsListening(true);
+    };
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      const transcript = Array.from(event.results)
+        .map((result) => result[0]?.transcript || '')
+        .join('');
+      setInputMessage(transcript);
+      inputSourceRef.current = 'voice';
+    };
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      setVoiceError(
+        event.error === 'not-allowed'
+          ? 'Microphone access was blocked. Allow microphone access for ShopSense in Chrome settings, then try again.'
+          : `Voice input failed: ${event.error}.`
+      );
+      setIsListening(false);
+    };
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+    recognitionRef.current = recognition;
+    try {
+      // Start synchronously from the button gesture; awaiting permission first
+      // causes Chrome to reject the Web Speech request as "not-allowed".
+      recognition.start();
+    } catch (error) {
+      setIsListening(false);
+      setVoiceError(
+        error instanceof DOMException && error.name === 'NotAllowedError'
+          ? 'Microphone access was blocked. Allow microphone access for ShopSense in Chrome settings, then try again.'
+          : 'Voice input could not start. Please try the microphone button again.'
+      );
+    }
+  };
+
   // Execute a conversational turn
-  const handleSendMessage = async (textToSend?: string) => {
+  const handleSendMessage = async (
+    textToSend?: string,
+    inputSource?: 'text' | 'voice'
+  ) => {
     const text = (textToSend || inputMessage).trim();
+    const effectiveInputSource = textToSend ? 'text' : inputSourceRef.current;
     if (!text || isLoading) return;
 
     const userMessage: ChatMessage = {
@@ -181,7 +243,8 @@ export const App: React.FC = () => {
         text,
         sessionId,
         turnId,
-        pageContext?.supported ? pageContext : undefined
+        pageContext?.supported ? pageContext : undefined,
+        inputSource ?? effectiveInputSource
       );
 
       // Construct Assistant Response Message
@@ -198,6 +261,7 @@ export const App: React.FC = () => {
         clarification: response.clarification,
         fallback: response.fallback,
         follow_up_suggestion: response.follow_up_suggestion,
+        follow_up_question: response.follow_up_question,
         topThreeComparison: response.top_three_comparison,
       };
 
@@ -503,6 +567,11 @@ export const App: React.FC = () => {
                       onExplore={(query) => handleSendMessage(query)}
                     />
                   )}
+                  {msg.follow_up_question && (
+                    <div className="follow-up-question">
+                      {msg.follow_up_question}
+                    </div>
+                  )}
 
                   {/* Product Recommendations Grid (Section 4.E) */}
                   {msg.recommendations && msg.recommendations.length > 0 && (
@@ -603,7 +672,10 @@ export const App: React.FC = () => {
             className="composer-textarea"
             placeholder="Describe what you are looking for, budget, or preferred features..."
             value={inputMessage}
-            onChange={(e) => setInputMessage(e.target.value)}
+            onChange={(e) => {
+              setInputMessage(e.target.value);
+              inputSourceRef.current = 'text';
+            }}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -615,7 +687,19 @@ export const App: React.FC = () => {
           />
 
           <div className="composer-footer-row">
-            <span className="composer-hint">↵ to send &bull; Shift+↵ for new line</span>
+            <span className="composer-hint">
+              {voiceError || '↵ to send • Shift+↵ for new line'}
+            </span>
+            <button
+              type="button"
+              className="btn-send"
+              onClick={toggleVoiceInput}
+              disabled={isLoading}
+              title={isListening ? 'Stop voice input' : 'Start voice input'}
+              aria-label={isListening ? 'Stop voice input' : 'Start voice input'}
+            >
+              {isListening ? <MicOff size={14} /> : <Mic size={14} />}
+            </button>
             <button
               type="submit"
               className="btn-send"

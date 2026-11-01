@@ -126,6 +126,16 @@ The state machine shares a strongly typed `ShopSenseGraphState` dictionary acros
    - Routes only to recommendation, clarification, fallback, or exact-ID comparison responses.
    - Fallbacks require a requested category or validated category hint and the same
      hard/relevance checks; ambiguous requests are never filled with arbitrary products.
+   - Recommendation responses may include one catalog-driven complementary suggestion.
+     The companion is selected from shared activity evidence, category diversity,
+     availability, and budget checks; product pairings are not hardcoded.
+
+## 7. Voice Input
+
+The extension composer uses the browser Web Speech API when available. Speech is
+transcribed into the same editable chat textarea before submission, so users can
+review or correct it. Voice turns are sent with `input_source: "voice"`; unsupported
+browsers show an explicit error and retain normal text input.
 
 ### Required invariants
 

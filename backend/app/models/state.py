@@ -466,6 +466,10 @@ class OrchestratorResponse(BaseModel):
         default=None, 
         description="At most one relevant, non-pushy complementary product suggestion"
     )
+    follow_up_question: Optional[str] = Field(
+        default=None,
+        description="Optional catalog-grounded question offering a related product category",
+    )
     top_three_comparison: Optional[List[Dict[str, Any]]] = None
     session_summary: Optional[Dict[str, Any]] = None
     sources_consulted: List[str] = Field(default_factory=list, description="Stores searched during this turn")
@@ -507,6 +511,7 @@ class ShopSenseGraphState(TypedDict, total=False):
     analysis_summary: Optional[str]
     fallback: Optional[FallbackSuggestion]
     follow_up_suggestion: Optional[ComplementarySuggestion]
+    follow_up_question: Optional[str]
 
     # Operational & Audit Metadata
     data_source_status: str

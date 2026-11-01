@@ -507,14 +507,23 @@ class ShopSenseWorkflow:
 
         # Feature 5: Context-Aware Follow-Up Suggestion (At most one relevant accessory)
         follow_up = None
+        follow_up_question = None
         if recommendations:
-            from app.services.follow_up_service import find_complementary_suggestion
+            from app.services.follow_up_service import (
+                find_complementary_suggestion,
+                find_follow_up_question,
+            )
             follow_up = find_complementary_suggestion(recommendations[0].product, intent)
+            follow_up_question = find_follow_up_question(
+                recommendations[0].product,
+                intent,
+            )
 
         return {
             "recommendations": recommendations,
             "analysis_summary": analysis_summary,
             "follow_up_suggestion": follow_up,
+            "follow_up_question": follow_up_question,
             "workflow_status": "explained"
         }
 
@@ -735,6 +744,7 @@ class ShopSenseWorkflow:
             analysis_summary=analysis_summary,
             recommendations=recommendations,
             follow_up_suggestion=state.get("follow_up_suggestion"),
+            follow_up_question=state.get("follow_up_question"),
             top_three_comparison=comparison_breakdown,
             session_summary={
                 "session_id": session_id,

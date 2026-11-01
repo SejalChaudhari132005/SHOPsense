@@ -90,7 +90,8 @@ class ShopSenseApiClient {
     message: string,
     sessionId: string,
     turnId: number,
-    clientContext?: Record<string, any>
+    clientContext?: Record<string, any>,
+    inputSource: 'text' | 'voice' = 'text'
   ): Promise<OrchestratorResponse> {
     return this.request<OrchestratorResponse>('/api/chat/', {
       method: 'POST',
@@ -98,7 +99,7 @@ class ShopSenseApiClient {
         message,
         session_id: sessionId,
         turn_id: turnId,
-        input_source: 'text',
+        input_source: inputSource,
         client_context: clientContext || null,
       }),
     });

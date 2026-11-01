@@ -479,6 +479,17 @@ def deterministic_extract_intent(query: str, history: Optional[List[Dict[str, st
         )
         if direct_curr_match:
             budget_max = float(direct_curr_match.group(1).replace(",", ""))
+        else:
+            budget_statement_match = re.search(
+                r"\b(?:budget|spend|price range)\s*(?:is|of|:)?\s*"
+                r"(?:[$₹€£?]\s*)?"
+                r"(\d+(?:,\d+)*(?:\.\d+)?)\b",
+                lower_text,
+            )
+            if budget_statement_match:
+                budget_max = float(
+                    budget_statement_match.group(1).replace(",", "")
+                )
 
     # A direct answer to a requested budget is a ceiling unless the user
     # explicitly signals approximation or uses a lower/upper-bound qualifier.

@@ -4,7 +4,8 @@ Offers at most one relevant complementary accessory when it adds genuine utility
 Respects user budget, avoids irrelevant upselling, and clearly labels demonstration data.
 """
 
-from typing import Optional, List
+import re
+from typing import Optional, List, Set
 from app.models.product import Product
 from app.models.state import ExtractedIntent, ComplementarySuggestion
 from app.services.catalog_service import load_and_validate_catalog
@@ -120,6 +121,10 @@ def find_complementary_suggestion(
     if not top_product:
         return None
 
+    catalog_suggestion = _find_catalog_related_product(top_product, intent)
+    if catalog_suggestion is not None:
+        return catalog_suggestion
+
     # Identify domain from top product category, tags, and user intent
     text = (
         f"{top_product.category} {top_product.product_name} "
@@ -174,3 +179,143 @@ def find_complementary_suggestion(
             else "Verified catalog"
         )
     )
+
+
+def find_follow_up_question(
+        top_product: Product,
+        intent: ExtractedIntent,
+) -> Optional[str]:
+        """Offer one optional related category only when the catalog supports it."""
+        catalog = load_and_validate_catalog()
+        activity = _tokens([
+            top_product.category,
+            top_product.subcategory or "",
+            *top_product.use_cases,
+            *top_product.tags,
+            intent.intended_use or "",
+        ])
+        candidates = []
+        for candidate in catalog:
+            if candidate.product_id == top_product.product_id:
+                continue
+            if candidate.category == top_product.category:
+                continue
+            evidence = _tokens([
+                candidate.category,
+                candidate.subcategory or "",
+                candidate.product_name,
+                *candidate.use_cases,
+                *candidate.tags,
+            ])
+            shared = activity & evidence
+            if shared:
+                candidates.append((len(shared), candidate.category, candidate.subcategory))
+        if not candidates:
+            return None
+        _, category, subcategory = max(candidates)
+        label = (subcategory or category).replace("_", " ")
+        if subcategory == "trail_running":
+            label = "hiking shoe"
+        return f"Would you like me to also show {label} options for this activity?"
+
+
+def _tokens(values: List[str]) -> Set[str]:
+    return {
+        token
+        for value in values
+        for token in re.findall(r"[a-z0-9]+", value.casefold())
+        if len(token) > 2
+    }
+
+
+def _find_catalog_related_product(
+        top_product: Product,
+        intent: ExtractedIntent,
+) -> Optional[ComplementarySuggestion]:
+        """Find one in-catalog companion using shared activity evidence."""
+        catalog = load_and_validate_catalog()
+        primary_evidence = _tokens(
+            [
+                top_product.category,
+                top_product.subcategory or "",
+                top_product.product_name,
+                *top_product.use_cases,
+                *top_product.tags,
+                intent.intended_use or "",
+            ]
+        )
+        health_context = _tokens(intent.health_considerations)
+        support_terms = {
+            "support", "relief", "cushioned", "cushioning", "stability",
+            "comfort", "ergonomic", "arch", "ankle", "joint", "knee",
+        }
+        primary_price = convert_currency(top_product.price, top_product.currency, "INR")
+        budget_inr = (
+            convert_currency(intent.budget_max, intent.budget_currency, "INR")
+            if intent.budget_max is not None
+            else None
+        )
+
+        scored = []
+        for candidate in catalog:
+            if candidate.product_id == top_product.product_id:
+                continue
+            if candidate.availability.value not in {"in_stock", "low_stock"}:
+                continue
+            if candidate.category == top_product.category and candidate.subcategory == top_product.subcategory:
+                continue
+            candidate_evidence = _tokens(
+                [
+                    candidate.category,
+                    candidate.subcategory or "",
+                    candidate.product_name,
+                    *candidate.use_cases,
+                    *candidate.tags,
+                ]
+            )
+            shared = primary_evidence & candidate_evidence
+            activity_tokens = {
+                token for token in shared
+                if token in {"hiking", "hike", "trail", "trekking", "mountain", "backpacking", "running", "travel", "college", "office"}
+            }
+            if not activity_tokens:
+                continue
+            health_support = candidate_evidence & support_terms
+            if health_context and not health_support:
+                continue
+            candidate_price = convert_currency(candidate.price, candidate.currency, "INR")
+            if intent.is_budget_strict and budget_inr is not None:
+                if primary_price + candidate_price > budget_inr:
+                    continue
+            category_diversity = 20 if candidate.category != top_product.category else 0
+            score = (
+                len(activity_tokens) * 10
+                + len(shared)
+                + len(health_support) * 12
+                + category_diversity
+            )
+            scored.append((score, -candidate_price, candidate, activity_tokens))
+
+        if not scored:
+            return None
+        _, _, companion, shared = max(scored, key=lambda item: (item[0], item[1]))
+        price_str = format_price_in_inr(companion.price, companion.currency)
+        activity = ", ".join(sorted(shared))
+        return ComplementarySuggestion(
+            product=companion,
+            utility_explanation=(
+                f"This catalog item supports the same activity context ({activity}) "
+                "and can complement your selected product."
+            ),
+            why_relevant=(
+                "It was selected from the catalog using shared activity and product evidence, "
+                "not a fixed product pairing."
+            ),
+            price_formatted=price_str,
+            is_pushy=False,
+            data_provenance=(
+                "Demo sample data"
+                if companion.provenance.is_sample_data
+                else "Verified catalog"
+            ),
+        )

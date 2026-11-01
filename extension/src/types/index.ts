@@ -126,6 +126,7 @@ export interface OrchestratorResponse {
   clarification?: ClarificationDecision | null;
   fallback?: FallbackSuggestion | null;
   follow_up_suggestion?: ComplementarySuggestion | null;
+  follow_up_question?: string | null;
   top_three_comparison?: Array<Record<string, any>> | null;
   session_summary?: Record<string, any> | null;
   sources_consulted?: string[];
@@ -143,6 +144,7 @@ export interface ChatMessage {
   clarification?: ClarificationDecision | null;
   fallback?: FallbackSuggestion | null;
   follow_up_suggestion?: ComplementarySuggestion | null;
+  follow_up_question?: string | null;
   topThreeComparison?: Array<Record<string, any>> | null;
   sourcesConsulted?: string[];
   storeStatuses?: Array<Record<string, any>>;
